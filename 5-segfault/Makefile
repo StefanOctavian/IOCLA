@@ -1,2 +1,3 @@
-PROGNAME := odd_even
+PROGNAME := segfault
 include ../../utils/Makefile.generic
+

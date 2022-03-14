@@ -1,2 +1,2 @@
-PROGNAME := rotations
+PROGNAME := pixels
 include ../../utils/Makefile.generic

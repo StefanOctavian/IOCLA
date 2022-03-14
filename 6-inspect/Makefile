@@ -1,2 +1,2 @@
-PROGNAME := len_xor
+PROGNAME := inspect
 include ../../utils/Makefile.generic
