@@ -1,554 +1,484 @@
-# **Laborator 02: Operații cu memoria. Introducere în GDB**
+# Laborator 03: Compilare
 
-În acest laborator vom înțelege modul în care datele sunt organizate în memorie, noțiunea de pointer și modurile în care se poate interacționa cu memoria, felul în care pointerii sunt folosiți pentru a returna sau a modifica parametri în cadrul unei funcții, cât și noțiunea de pointer la o funcție și folosirea acesteia în situații necesare. De asemenea, laboratorul vizează introducerea într-un utilitar de analiză dinamică, și anume GDB.
+Etapele prin care trece un program scris în `C` din momentul în care este scris până când este rulat ca un proces sunt, in ordine:
 
-## **Pointeri**
+- preprocesare
+- compilare
+- asamblare
+- link editare
 
-În limbajul C interacțiunea cu memoria se realizează prin intermediul pointerilor. Reamintim că un pointer este o variabilă ce reține o adresă de memorie. Forma generală de declarare este urmatoarea: `tip *nume_variabilă`, unde `nume_variabilă` reprezintă orice tip de date valid din C.
+În imaginea de mai jos sunt reprezentate si detaliate aceste etape:
 
-> **WARNING:** **Asteriscul(`*`)** folosit la declararea unui pointer denotă faptul ca acesta este un pointer și nu trebuie confundat cu operatorul de dereferențiere, fiind două concepte total diferite reprezentate cu același simbol.
-> Declararea unui pointer nu înseamnă alocarea unei zone de memorie în care pot fi stocate date. Un pointer este tot un tip de date, a cărui valoare este un număr ce reprezintă o adresă de memorie.
-> ```c
->   int *p = 0xCAFEBABE; /* Declararea unui pointer */
->   int x = *p; /* Valoarea de la adresa conținută de p. */
-> ```
+![phases-full.png](https://ocw.cs.pub.ro/courses/_media/iocla/laboratoare/phases-full.png?cache=)
 
- În C un pointer poate reprezenta:
- -  Adresa unor date de un anume tip
- -  Adresa unei zone de memorie
- -  Adresa unei funcții
- -  Adresa unei zone cu conținut necunoscut (pointer la void)
+## Preprocesare
 
- > **TIP:** Dimensiunea unui pointer depinde de arhitectura și sistemul de operare pe care a fost compilat programul. Dimensiunea unui pointer se determină cu `sizeof(void*)` și nu este în mod necesar egală cu dimensiunea unui `int`.
+În cadrul primei etape, cea de `preprocesare` au loc următoarele acțiuni plecând de la fișierul cod sursă:
+* eliminarea comentariilor
+* expandarea directivelor care încep cu simbolul `#`
+    * înlocuirea valorilor corespunzătoare pentru `#define ...`
+    * includerea conținutului fișierelor date ca parametru directivei `#include`
 
-### **Pointeri la void**
+## Compilare
 
-Un pointer la void este un pointer care nu are un tip asociat. Pointerii la void au o flexibilitate mare deoarece pot pointa la orice tip de date, dar au și o limitare la fel de mare, și anume că nu pot fi dereferențiați, iar pentru a putea fi folosiți în operații cu pointeri trebuie convertiți la un tip de date cunoscut.
+În etapa de `compilare` au loc următoarele subetape:
+* analiza lexicală - verificarea limbajului
+* analiza sintactică - verificarea ordinii cuvintelor (`;` vine la finalul asignării unei variabile)
+* analiza semantică - determinarea sensului codului scris (determinarea contextului variabilelor)
+* generarea de cod în limbaj de asamblare care este o formă human-readable a ce ajunge procesorul să execute efectiv
 
-Cel mai adesea sunt folosiți în implementarea de funcții generice. De exemplu, funcțiile `malloc()` și `calloc()` returnează un pointer la void ceea ce permite ca aceste funcții să fie folosite pentru alocarea de memorie pentru orice tip de date.
+## Assembly / Asamblare
 
-Un exemplu de folosire a pointerilor la void este următorul:
+Assembly / Asamblare este penultima etapă a procesului de compilare în sens larg.
+În urma finalizării acestei etape rezultatul va fi crearea a unul sau mai multe fișiere obiect. Fișierele obiect pot conține mai multe lucruri,
+printre care:
+1. nume de simboluri
+1. constante folosite în cadrul programului
+1. cod compilat
+1. valori de tip import/export care vor fi „rezolvate” în etapa de linking
 
-```c
-#include <stdio.h>
+Pentru a crea un fișier obiect în cazul în care se utilizează compilatorul `gcc` se folosește opțiunea `-c` așa cum puteți vedea și în secțiunea [Invocarea linker-ului](#invocarea-linker-ului) de mai jos.
 
-void increment(void *data, int element_size) {
-    /* Se verifică dacă data introdusă este un char */
-	if (element_size == sizeof(char)) {
-        /* După cum am precizat, pentru a putea fi dereferențiat,
-        *  un pointer la void trebuie castat
-        */
-		char *char_ptr = data;
- 		++(*char_ptr);
-	}
+## Linking / Legare
 
-	if (element_size == sizeof(int)) {
-		int *int_ptr = data;
-		++(*int_ptr);
-	}
+Linking / Legare este ultima etapă a procesului de compilare în sens larg.
+La finalul acestei etape va rezulta un fișier executabil prin unificarea(„legarea”) mai multor fișiere obiect care pot avea la bază limbaje de 
+programare de nivel înalt diferite; tot ceea ce contează este ca fișierele obiect să fie create în mod corespunzător pentru ca linker-ul să le 
+poată „interpreta”.
+
+Pentru a obține un fișier executabil din fișiere obiect, linker-ul realizează următoarele acțiuni:
+1. rezolvarea simbolurilor (*symbol resolution*): localizarea simbolurilor nedefinite ale unui fișier obiect în alte fișiere obiect
+1. unificarea secțiunilor: unificarea secțiunilor de același tip din diferite fișiere obiect într-o singură secțiune în fișierul executabil
+1. stabilirea adreselor secțiunilor și simbolurilor (*address binding*): după unificare se pot stabili adresele efective ale simbolurilor în cadrul fișierului executabil
+1. relocarea simbolurilor (*relocation*): odată stabilite adresele simbolurilor, trebuie actualizate, în executabil, instrucțiunile și datele care referă adresele acelor simboluri
+1. stabilirea unui punct de intrare în program (*entry point*): adică adresa primei instrucțiuni ce va fi executată
+
+## Invocarea linker-ului
+
+Linker-ul este, în general, invocat de utilitarul de compilare (`gcc`, `clang`, `cl`).
+Astfel, invocarea linker-ului este transparentă utilizatorului.
+În cazuri specifice, precum crearea unei imagini de kernel sau imagini pentru sisteme încorporate, utilizatorul va invoca direct linkerul.
+
+Dacă avem un fișier `app.c` cod sursă C, vom folosi compilatorul pentru a obține fișierul obiect `app.o`:
+```
+gcc -c -o app.o app.c
+```
+Apoi pentru a obține fișierul executabil `app` din fișierul obiect `app.o`, folosim tot utilitarul `gcc`:
+```
+gcc -o app app.o
+```
+În spate, `gcc` va invoca linker-ul și va construi executabilul `app`.
+Linker-ul va face legătura și cu biblioteca standard C (libc).
+
+Procesul de linking va funcționa doar dacă fișierul `app.c` are definită funcția `main()`, funcția principală a programului.
+Fișierele linkate trebuie să aibă o singură funcție `main()` pentru a putea obține un executabil.
+
+Dacă avem mai multe fișiere sursă C, invocăm compilatorul pentru fiecare fișier și apoi linker-ul:
+```
+gcc -c -o helpers.o helpers.c
+gcc -c -o app.o app.c
+gcc -o app app.o helpers.o
+```
+Ultima comandă este comanda de linking, care leagă fișierele obiect `app.o` și `helpers.o` în fișierul executabil `app`.
+
+În cazul fișierelor sursă C++, vom folosi comanda `g++`:
+```
+g++ -c -o helpers.o helpers.cpp
+g++ -c -o app.o app.cpp
+g++ -o app app.o helpers.o
+```
+Putem folosi și comanda `gcc` pentru linking, cu precizarea linkării cu biblioteca standard C++ (libc++):
+```
+gcc -o app app.o helpers.o -lstdc++
+```
+
+Utilitarul de linkare este, în Linux, `ld` și este invocat în mod transparent de `gcc` sau `g++`.
+Pentru a vedea cum este invocat linker-ul, folosim opțiunea `-v` a utilitarului `gcc`, care va avea un rezultat asemănător cu:
+```
+/usr/lib/gcc/x86_64-linux-gnu/7/collect2 -plugin /usr/lib/gcc/x86_64-linux-gnu/7/liblto_plugin.so
+-plugin-opt=/usr/lib/gcc/x86_64-linux-gnu/7/lto-wrapper -plugin-opt=-fresolution=/tmp/ccwnf5NM.res
+-plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lgcc_s -plugin-opt=-pass-through=-lc
+-plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lgcc_s --build-id --eh-frame-hdr -m elf_i386 --hash-style=gnu
+--as-needed -dynamic-linker /lib/ld-linux.so.2 -z relro -o hello
+/usr/lib/gcc/x86_64-linux-gnu/7/../../../i386-linux-gnu/crt1.o
+/usr/lib/gcc/x86_64-linux-gnu/7/../../../i386-linux-gnu/crti.o /usr/lib/gcc/x86_64-linux-gnu/7/32/crtbegin.o
+-L/usr/lib/gcc/x86_64-linux-gnu/7/32 -L/usr/lib/gcc/x86_64-linux-gnu/7/../../../i386-linux-gnu
+-L/usr/lib/gcc/x86_64-linux-gnu/7/../../../../lib32 -L/lib/i386-linux-gnu -L/lib/../lib32 -L/usr/lib/i386-linux-gnu
+-L/usr/lib/../lib32 -L/usr/lib/gcc/x86_64-linux-gnu/7 -L/usr/lib/gcc/x86_64-linux-gnu/7/../../../i386-linux-gnu
+-L/usr/lib/gcc/x86_64-linux-gnu/7/../../.. -L/lib/i386-linux-gnu -L/usr/lib/i386-linux-gnu hello.o -lgcc --push-state
+--as-needed -lgcc_s --pop-state -lc -lgcc --push-state --as-needed -lgcc_s --pop-state
+/usr/lib/gcc/x86_64-linux-gnu/7/32/crtend.o /usr/lib/gcc/x86_64-linux-gnu/7/../../../i386-linux-gnu/crtn.o
+COLLECT_GCC_OPTIONS='-no-pie' '-m32' '-v' '-o' 'hello' '-mtune=generic' '-march=i686'
+```
+Utilitarul `collect2` este, de fapt, un wrapper peste utilitarul `ld`.
+Rezultatul rulării comeznii este unul complex.
+O invocare "manuală" a comenzii `ld` ar avea forma:
+```
+ld -dynamic-linker /lib/ld-linux.so.2 -m elf_i386 -o app /usr/lib32/crt1.o /usr/lib32/crti.o app.o helpers.o -lc /usr/lib32/crtn.o
+```
+Argumentele comenzii de mai sus au semnificația:
+* `-dynamic-linker /lib/ld-linux.so.2`: precizează loaderul / linkerul dinamic folosit pentru încărcarea executabilului dinamic
+* `-m elf_i386`: se linkează fișiere pentru arhitectura x86 (32 de biți, i386)
+* `/usr/lib32/crt1.o`, `/usr/lib32/crti.o`, `/usr/lib32/crtn.o`: reprezintă biblioteca de runtime C (`crt` - *C runtime*) care oferă suportul necesar pentru a putea încărca executabilul
+* `-lc`: se linkează biblioteca standard C (libc)
+
+## Inspectarea fișierelor
+
+Pentru a urmări procesul de linking, folosim utilitare de analiză statică precum `nm`, `objdump`, `readelf`.
+
+Folosim utilitarul `nm` pentru a afișa simbolurile dintr-un fișier obiect sau un fișier executabil:
+```
+$ nm hello.o
+00000000 T main
+         U puts
+
+$ nm hello
+0804a01c B __bss_start
+0804a01c b completed.7283
+0804a014 D __data_start
+0804a014 W data_start
+08048370 t deregister_tm_clones
+08048350 T _dl_relocate_static_pie
+080483f0 t __do_global_dtors_aux
+08049f10 t __do_global_dtors_aux_fini_array_entry
+0804a018 D __dso_handle
+08049f14 d _DYNAMIC
+0804a01c D _edata
+0804a020 B _end
+080484c4 T _fini
+080484d8 R _fp_hw
+08048420 t frame_dummy
+08049f0c t __frame_dummy_init_array_entry
+0804861c r __FRAME_END__
+0804a000 d _GLOBAL_OFFSET_TABLE_
+         w __gmon_start__
+080484f0 r __GNU_EH_FRAME_HDR
+080482a8 T _init
+08049f10 t __init_array_end
+08049f0c t __init_array_start
+080484dc R _IO_stdin_used
+080484c0 T __libc_csu_fini
+08048460 T __libc_csu_init
+         U __libc_start_main@@GLIBC_2.0
+08048426 T main
+         U puts@@GLIBC_2.0
+080483b0 t register_tm_clones
+08048310 T _start
+0804a01c D __TMC_END__
+08048360 T __x86.get_pc_thunk.bx
+```
+
+Comanda `nm` afișează trei coloane:
+* adresa simbolului
+* secțiunea și tipul unde se găsește simbolul
+* numele simbolului
+
+Un simbol este numele unei variabile globale sau a unei funcții.
+Este folosit de linker pentru a face conexiunile între diferite module obiect.
+Simbolurile nu sunt necesare pentru executabile, de aceea executabilele pot fi stripped.
+
+Adresa simbolului este, de fapt, offsetul în cadrul unei secțiuni pentru fișierele obiect.
+Și este adresa efectivă pentru executabile.
+
+A doua coloana precizează secțiunea și tipul simbolului.
+Dacă este vorba de majusculă, atunci simbolul este exportat, este un simbol ce poate fi folosit de un alt modul.
+Dacă este vorba de literă mică, atunci simbolul nu este exportat, este propriu modulului obiect, nefolosibil în alte module.
+Astfel:
+* `d`: simbolul este în zona de date inițializate (`.data`), neexportat
+* `D`: simbolul este în zona de date inițializate (`.data`), exportat
+* `t`: simbolul este în zona de cod (`.text`), neexportat
+* `T`: simbolul este în zona de cod (`.text`), exportat
+* `r`: simbolul este în zona de date read-only (`.rodata`), neexportat
+* `R`: simbolul este în zona de date read-only (`.rodata`), exportat
+* `b`: simbolul este în zona de date neinițializate (`.bss`), neexportat
+* `B`: simbolul este în zona de date neinițializate (`.bss`), exportat
+* `U`: simbolul este nedefinit (este folosit în modulul curent, dar este definit în alt modul)
+
+Alte informații se găsesc în pagina de manual a utilitarul `nm`.
+
+Cu ajutorul comenzii `objdump` dezasamblăm codul fișierelor obiect și a fișierelor executabile.
+Putem vedea, astfel, codul în limbaj de asamblare și funcționarea modulelor.
+
+Comanda `readelf` este folosită pentru inspectarea fișierelor obiect sau executabile.
+Cu ajutorul comenzii `readelf` putem să vedem headerul fișierelor.
+O informație importantă în headerul fișierelor executabile o reprezintă entry pointul, adresa primei instrucțiuni executate:
+```
+$ readelf -h hello
+ELF Header:
+  Magic:   7f 45 4c 46 01 01 01 00 00 00 00 00 00 00 00 00
+  Class:                             ELF32
+  Data:                              2's complement, little endian
+  Version:                           1 (current)
+  OS/ABI:                            UNIX - System V
+  ABI Version:                       0
+  Type:                              EXEC (Executable file)
+  Machine:                           Intel 80386
+  Version:                           0x1
+  Entry point address:               0x8048310
+  Start of program headers:          52 (bytes into file)
+  Start of section headers:          8076 (bytes into file)
+  Flags:                             0x0
+  Size of this header:               52 (bytes)
+  Size of program headers:           32 (bytes)
+  Number of program headers:         9
+  Size of section headers:           40 (bytes)
+  Number of section headers:         35
+  Section header string table index: 34
+```
+
+Cu ajutorul comenzii `readelf` putem vedea secțiunile unui executabil / fișier obiect:
+```
+$ readelf -S hello
+There are 35 section headers, starting at offset 0x1f8c:
+Section Headers:
+  [Nr] Name              Type            Addr     Off    Size   ES Flg Lk Inf Al
+  [ 0]                   NULL            00000000 000000 000000 00      0   0  0
+  [ 1] .interp           PROGBITS        08048154 000154 000013 00   A  0   0  1
+  [ 2] .note.ABI-tag     NOTE            08048168 000168 000020 00   A  0   0  4
+  [ 3] .note.gnu.build-i NOTE            08048188 000188 000024 00   A  0   0  4
+[...]
+```
+
+Tot cu ajutorul comenzii `readelf` putem lista (*dump*) conținutul unei anumite secțiuni:
+```
+$ readelf -x .rodata hello
+
+Hex dump of section '.rodata':
+  0x080484d8 03000000 01000200 48656c6c 6f2c2057 ........Hello, W
+  0x080484e8 6f726c64 2100                       orld!.
+```
+
+Majoritatea compilatoarelor oferă opțiunea de a genera și un fișier cu programul scris în limbaj de asamblare.
+
+>**NOTE**: În cazul compilatorului `gcc` este de ajuns să adăugați flag-ul `-S` și vă va genera un
+fișier `*.s` cu codul aferent. În arhiva de `TODO` aveți un exemplu de trecere a unui program
+foarte simplu `hello.c` prin cele patru faze. Îl puteți testa pe un sistem Unix/Linux și pe un sistem Windows cu suport de MinGW.
+```shell
+$ make
+cc  -E -o hello.i hello.c
+cc -Wall -S -o hello.s hello.i
+cc  -c -o hello.o hello.s
+cc  -o hello hello.o
+
+$ ls
+Makefile  hello  hello.c  hello.i  hello.o  hello.s
+
+$ ./hello
+Hello, World!
+
+$ tail -10 hello.i
+
+
+# 5 "hello.c"
+int main(void)
+{
+ puts("Hello, World!");
+
+ return 0;
 }
 
-int main() {
-	char c = 'a';
-	int x = 10;
+$ cat hello.s
+	.file	"hello.c"
+	.section	.rodata
+.LC0:
+	.string	"Hello, World!"
+	.text
+	.globl	main
+	.type	main, @function
+main:
+.LFB0:
+	.cfi_startproc
+	pushq	%rbp
+	.cfi_def_cfa_offset 16
+	.cfi_offset 6, -16
+	movq	%rsp, %rbp
+	.cfi_def_cfa_register 6
+	movl	$.LC0, %edi
+	call	puts
+	movl	$0, %eax
+	popq	%rbp
+	.cfi_def_cfa 7, 8
+	ret
+	.cfi_endproc
+.LFE0:
+	.size	main, .-main
+	.ident	"GCC: (Debian 5.2.1-17) 5.2.1 20150911"
+	.section	.note.GNU-stack,"",@progbits
 
-	increment(&c, sizeof(c));
-	increment(&x, sizeof(x));
+$ file hello.o
+hello.o: ELF 64-bit LSB relocatable, x86-64, [...]
 
-	printf("%c, %d\n", c, x); /* Va avea ca rezultat: b, 11 */
-	return 0;
-}
+$ file hello
+hello: ELF 64-bit LSB executable, x86-64, [...]
+
+$ objdump -d hello.o
+
+hello.o:     file format elf64-x86-64
+
+
+Disassembly of section .text:
+
+0000000000000000 <main>:
+   0:	55                   	push   %rbp
+   1:	48 89 e5             	mov    %rsp,%rbp
+   4:	bf 00 00 00 00       	mov    $0x0,%edi
+   9:	e8 00 00 00 00       	callq  e <main+0xe>
+   e:	b8 00 00 00 00       	mov    $0x0,%eax
+  13:	5d                   	pop    %rbp
+  14:	c3                   	retq
 ```
 
-### **Operații cu pointeri. Aritmetica pointerilor**
-
-Operațiile aritmetice pe pointeri sunt puțin diferite de cele pe tipurile de date întregi. Singurele operații valide sunt **incrementarea** sau **decrementarea** unui pointer, **adunarea** sau **scăderea** unui întreg la un pointer, respectiv scăderea a doi pointeri de **același tip**, iar comportamentul acestor operații este influențat de tipul de date la care pointerii se referă.
-
-Prin incrementarea unui pointer legat la un tip de date `T`, adresa nu este crescută cu 1, ci cu valoarea `sizeof(T)` care asigură adresarea urmatorului obiect de același tip. În mod similar, adunarea unui întreg `n` la un pointer `p` (deci operația `p + n`) reprezintă de fapt `p + n * sizeof(*p)`. De exemplu:
-
-```c
-char *char_ptr = 1000;
-short *short_ptr = 2000;
-int *int_ptr = 3000;
-
-++char_ptr; /* Așa cum ne așteptăm char_ptr va pointa la adresa 1001 */
-++short_ptr; /* short_ptr pointează la adresa 2002 */
-++int_ptr; /* int_ptr pointează la adresa 3004 */
+Pentru a genera sintaxa intel pe 32 de biți, se pot folosi aceste opțiuni:
+```shell
+cc -Wall -m32 -S -masm=intel  -o hello.s hello.i
 ```
 
-![](./images/arit.png)
-
-Scăderea a doi pointeri este posibilă doar dacă ambii au același tip. Rezultatul scăderii este obținut prin calcularea diferenței adreselor de memorie către care pointează. Spre exemplu, calcularea lungimii unui șir de caractere:
-
-```c
-char *s = "Learn IOCLA, you must!";
-char *p = s;
-for (; *p; ++p); /* Se iterează caracter cu caracter, până la '\0' */
-
-printf("%ld", p - s); /* Se va afișa 22. */
-```
-#### **Interpretarea datelor din memorie**
-Pe cele mai multe calculatoare moderne, cea mai mică unitate de date care poate fi adresată este `byte-ul/octetul` (8 biți), acest lucru însemnând că putem privi datele în memorie drept o înșiruire de bytes, fiecăruia corespunzându-i o adresă. Așa cum s-a menționat în [laboratorul trecut](https://ocw.cs.pub.ro/courses/iocla/laboratoare/laborator-01), în cazul în care dorim să stocăm o informație reprezentată pe mai mulți octeți va trebui să ținem cont de ordinea impusă de arhitectura sistemului, denumită [endianness](https://en.wikipedia.org/wiki/Endianness). Mai jos se poate observa mecanismul de extragere a datelor din memorie pe o arhitectură **little-endian**:
-```c
-int n = 0xCAFEBABE;
-unsigned char first_byte = *((unsigned char*) &n); /* Se extrage primul byte al lui n */
-unsigned char second_byte = *((unsigned char*) &n + 1); /* Se extrage al doilea byte al lui n */
-printf("0x%x, 0x%x\n", first_byte, second_byte); /* Se va afișa 0xBE, 0xBA */
-```
-
-> **NOTE:** În cazul pointerilor castați, operațiile aritmetice se realizează pe tipul la care aceștia au fost castați.
-
-> **WARNING:** Nu faceți confuzie intre `*p++` și `(*p)++`. În primul caz se incrementează adresa la care pointează p, iar în cel de al doilea, valoarea de la acea adresă.
-> Aritmetica pe pointeri de tip void nu este posibilă din lipsa unui tip de date concret la care pointează.
-
-### **Pointeri la tablouri**
-
-Între pointeri și tablouri există o legatură foarte stransă. În C numele unui tablou este un *pointer constant* (adresa sa este alocată de către compilator și nu mai poate fi modificată în timpul execuției) la primul element din tablou: `v = &v[0]`. De exemplu:
-
-```c
-int v[10], *p;
-p = v;
-++p; /* Corect */
-++v; /* EROARE */
-```
-Vectorii sunt stocați într-o zonă continuă de memorie, astfel că aritmetica pe pointeri funcționează la fel și in cazul lor, obținând urmatoarele echivalențe:
-
-```c
-v[0] <==> *v
-v[1] <==> *(v + 1)
-v[n] <==> *(v + n)
-&v[0] <==> v
-&v[1] <==> v + 1
-&v[n] <==> v + n
-```
-
-De asemenea, un vector conţine şi informaţii legate de lungimea vectorului şi dimensiunea totală ocupată în memorie, astfel că operatorul `sizeof(v)` va returna spațiul ocupat în memorie (numărul de octeți), iar `sizeof(v) / sizeof(*v)` va returna numărul de elemente ale lui `v`.
-
-Folosind pointeri putem să alocăm dinamic memorie. În acest sens, alocarea dinamică a unui tablou bidimensional (o matrice) se poate realiza astfel:
-
-Metoda tradițională, în care alocăm un array de pointeri la pointeri:
-
-```c
-int **array1 = malloc(nrows * sizeof(*array1));
-for (i = 0; i < nrows; ++i)
-    array1[i] = malloc(ncolumns * sizeof(**array1));
-```
-
-Dacă dorim sa păstrăm array-ul într-o zonă continuă de memorie:
-
-```c
-int **array2 = malloc(nrows * sizeof(*array2));
-array2[0] = malloc(nrows * ncolumns * sizeof(**array2));
-for (i = 1; i < nrows; ++i)
-    array2[i] = array2[0] + i * ncolumns;
-```
-
-Mai jos este prezentată diferența dintre cele doua abordări:
-
-![](./images/arrays.png)
-
-În ambele cazuri, elementele matricei pot fi accesate folosind operatorul de indexare `[]`: `arrayX[i][j]`. De asemenea, și în cazul matricelor, ca și la vectori, putem înlocui indexarea cu operații cu pointeri. Astfel, `arr[i][j] = *(arr + i)[j] = *(*(arr + i) + j)`.
-
-> **WARNING:** De fiecare dată cand alocați memorie cu ajutorul unui pointer, folosiți `p = malloc(n * sizeof(*p))` în loc de `p = malloc(n * sizeof(int))`. Folosirea lui `sizeof(*p)` face codul mai robust și *self-documenting*, astfel că cine citește codul va vedea că se alocă un număr corect de octeți, fără a fi nevoie să verifice tipul de date la care pointează `p`.
-
-### **Structuri. Pointeri la structuri**
-
-Structurile sunt tipuri de date în care putem grupa mai multe variabile eventual de tipuri diferite (spre deosebire de vectori, care conţin numai date de acelasi tip). O structură se poate defini astfel:
-
-```c
-struct nume_structura {
-    declarații_câmpuri
-};
-```
-
-Pentru simplificarea declaraţiilor, putem asocia unei structuri un nume de tip de date: `typedef struct {declarații_câmpuri} nume_structură;`
-
-```c
-typedef struct student {
-    char *nume;
-    int an;
-    float medie;
-} Student;
-
-int main() {
-    Student s;
-    s.nume = (char *) malloc(20 * sizeof(*s.nume));
-    s.an = 3;
-    return 0;
-}
-```
-
-Accesul la membrii unei structuri se face folosind operatorul `.`.
-
-În cazul pointerilor la structuri, accesul la membri se face dereferențiind pointerii:
-
-```c
-Student *s = (Student *) malloc(sizeof(*s));
-(*s).an = 3;
-/* În practică, pentru a ușura scrierea se folosește operatorul "->" */
-s->an = 4;
-```
-
-Dimensiunea unei structuri nu este întotdeauna egală cu suma dimensiunilor câmpurilor sale. Acest lucru se întâmplă datorită padding-ului adăugat de compilator pentru a nu apărea probleme de aliniere a memoriei. Padding-ul este adăugat dupa un membru al unei structuri care este urmat de către un altul cu o dimensiune mai mare sau la finalul structurii.
-
-```c
-struct A {
-	/* sizeof(int) = 4  */
-	int x;
-	/* Se face padding cu 4 bytes */
-
-	/* sizeof(double) = 8 */
-	double z;
-
-	/* sizeof(short) = 2 */
-	short y;
-	/* Se face padding cu 6 bytes */
-};
-
-printf("Size of struct: %zu", sizeof(struct A)) /* Se va afișa 24 */
-```
-
-![](./images/padding.png)
-
-Porțiunea roșie reprezintă padding-ul adăugat de compilator, iar cea verde membrii structurii.
-
-Totuși, putem sa împiedicăm compilatorul să facă padding folosind `__attribute__((packed))` la declararea structurii. (Mai multe detalii despre acest aspect la cursul de Protocoale de Comunicație). Astfel, pentru exemplul anterior rezultatul va fi 14.
-
-> **NOTE:** Dacă declarați pointeri la structuri, nu uitați să alocați memorie pentru aceștia înainte de a accesa câmpurile structurii. Nu uitați să alocaţi și câmpurile structurii, care sunt pointeri, înainte de utilizare, dacă este cazul. De asemenea, fiți atenți și la modul de accesare al câmpurilor.
-
-### **Pointeri în funcții și pointeri la funcții**
-
-În cadrul funcțiilor, pointerii pot fi folosiți pentru:
-
-- Transmiterea de rezultate prin argumente
-- Transmiterea unei adrese prin rezultatul funcției
-- Transmiterea altor funcții și utilizarea ulterioară a acestora
-
-O funcție care trebuie să modifice mai multe valori primite prin argumente sau care trebuie să transmită mai multe rezultate calculate în cadrul funcţiei trebuie să folosească argumente de tip pointer.
-
-```c
-#include <stdio.h>
-
-void swap(int *a, int *b) {
-    int c = *a;
-    *a = *b;
-    *b = c;
-}
-
-int main() {
-     int a = 3, b = 5;
-     swap(&a, &b);
-
-     printf("a = %d, b = %d\n", a, b); /* Se va afișa a = 5, b = 3 */
-
-     return 0;
-}
-```
-
-O funcție poate returna un pointer, dar acest pointer nu poate conține adresa unei variabile locale. De cele mai multe ori, rezultatul este unul din argumente, modificat eventual în funcție. Spre exemplu:
-
-```c
-char* toUpper(char *s) {
-    /* Primește un sir de caractere și întoarce șirul scris cu majuscule */
-    for (int i = 0 ; s[i] ; ++i) {
-        if (s[i] >= 'a' && s[i] <= 'z') {
-            s[i] -= 32;
-        }
-    }
-
-    return s;
-}
-```
-
-Dacă o funcție returnează adresa unei variabile locale este obligatoriu ca aceasta să fie statică. Durata de viață a unei variabile locale se încheie odată cu terminarea execuției funcției în care a fost definită și de aceea adresa unei astfel de variabile nu trebuie transmisă în afara funcției.
-
-Numele unei funcții reprezintă adresa de memorie la care începe funcția. Un pointer la o funcție este o variabilă ce stochează adresa unei funcții ce poate fi apelată ulterior prin intermediul acelui pointer. Uzual, pointerii la funcții sunt folosiți pentru a trimite o funcție ca parametru unei alte funcții.
-
-Declararea unui pointer la o funcție se face în felul următor: `tip (*pf) (lista_parametri_formali)`
-
-De ce este necesară folosirea parantezelor suplimentare? Dacă acestea ar lipsi atunci am discuta despre o funcție ce are ca rezultat un pointer. În continuare, sunt prezentate doua exemple de folosire a pointerilor la funcții:
-
-```c
-int add(int a, int b) {
-    return a + b;
-}
-
-int subtract(int a, int b) {
-    return a - b;
-}
-
-int operation(int x, int y, int (*func) (int, int)) {
-    return func(x, y);
-}
-
-int main() {
-    int (*minus)(int, int) = subtract;
-    printf("%d", operation(10, 5, minus)); /* Se va afișa 5 */
-
-    return 0;
-}
-```
-
-Funcția [qsort()](http://www.cplusplus.com/reference/cstdlib/qsort/) din `stdlib.h` folosește drept comparator un pointer la funcție.
-
-```c
-int compare(const void *a, const void *b) {
-    return *(int *) a - *(int *)b;
-}
-
-int main() {
-    int v[] = {100, 5, 325, 1, 30};
-    int size = sizeof(v) / sizeof(*v);
-
-    qsort(v, size, sizeof(*v), compare);
-    for (int i = 0 ; i < size ; ++i) {
-        printf("%d ", v[i]);
-    }
-
-    return 0;
-}
-```
-
-## **GNU Debugger(GDB)**
-
-**Lansarea în execuție a programului**
-
-Pentru a lansa programul urmărit în execuție există două comenzi disponibile:
-
-- `r` sau `run` - această comandă va lansa în execuție programul
-- `start` - spre deosebire de run, această comandă va începe execuția programului, însă se va opri imediat după intrarea în main
-
-**Breakpoints**
-
-Elementul esențial al GDB-ului este breakpoint-ul. Practic, un breakpoint setat la o anumită instrucțiune face ca execuția programului să se oprească de fiecare dată când se ajunge la acest punct. Setarea unui breakpoint se face cu următoarea comandă:
-
-```py
-break [location]
-```
-
-unde *location* poate reprezenta numele unei funciții, numărul liniei de cod sau chiar o adresă din memorie, caz în care adresa trebuie precedată de simbolul *. De exemplu: **break \*0xCAFEBABE**
-
-**Parcurgerea instrucțiunilor**
-- `si` sau `stepi` - trimite instrucțiunea curentă spre execuție
-- `ni` sau `nexti` - comandă similară cu stepi, însă dacă instrucțiunea curentă este un apel de funcție, debugger-ul nu va intra în funcție
-- `c` sau `continue` - continuă execuția programului până la întâlnirea următorului breakpoint sau până la terminarea acestuia.
-- `finish` - continuă execuția programului până la ieșirea din funcția curentă
-
-**Inspectarea memoriei**
-
-- `p` sau `print` var - Afișează valoarea lui var. Print este o comandă foarte flexibilă, permițând dereferențierea pointerilor, afișarea adreselor variabilelor și indexarea prin vectori folosind *, & și []. Comanda print poate fi urmată de parametrul /f care specifică formatul de afișare(x pentru hexa, d pentru zecimal, s pentru șir de caractere).
-- `x` sau `examine` - Inspectează conținutul de la adresa dată. Modul de folosire al acestei comenzi este următorul:
-
-```py
-x/nfu address
-```
-
-unde:
-
-- n este numărul de elemente afișate
-- f este formatul de afișare (x pentru hexa, d pentru zecimal, s pentru șir de caractere și i pentru instrucțiuni)
-- u este dimensiunea unui element (b pentru 1 octet, h pentru 2, w pentru 4 și g pentru 8 octeți)
-
-Vă recomandăm și articolul [Debugging](https://ocw.cs.pub.ro/courses/programare/tutoriale/debugging) pentru a aprofunda cum folosim GDB atât din CLI cât și prin intermediul unui IDE.
-
-## **Pregătire infrastructură**
-
-> **IMPORTANT:** În cadrul laboratoarelor vom folosi repository-ul de git al materiei IOCLA - [https://github.com/systems-cs-pub-ro/iocla](https://github.com/systems-cs-pub-ro/iocla). Repository-ul este clonat pe desktop-ul mașinii virtuale. Pentru a îl actualiza, folosiți comanda `git pull origin master` din interiorul directorului în care se află repository-ul (`~/Desktop/iocla`). Recomandarea este să îl actualizați cât mai frecvent, înainte să începeți lucrul, pentru a vă asigura că aveți versiunea cea mai recentă. Dacă doriți să descărcați repository-ul în altă locație, folosiți comanda `git clone https://github.com/systems-cs-pub-ro/iocla ${target}`. Pentru mai multe informații despre folosirea utilitarului `git`, urmați ghidul de la [Git Immersion](https://gitimmersion.com/).
-
- Pentru desfășurarea acestui laborator vom folosi interfața în linia de comandă.
-
- Pe parcursul laboratorului, în linia de comandă, vom folosi:
-
- - comanda `gcc` pe post de linker
- - `gdb` pentru analiza dinamică, investigație și debugging
-
- În general nu va fi nevoie să dați comenzi de compilare. Fiecare director cuprinde un Makefile pe care îl puteți rula pentru a compila în mod automat fișierele cod sursă limbaj de asamblare sau C.
-
- ### **1. Iterarea print-un vector de întregi**
-
- Veți rezolva exercițiul plecând de la fișierul **iterate.c** aflat în directorul **1-iterate**.
-
- Se dă urmatoarea bucată de cod în C:
-
- ```c
- #include <stdio.h>
-
-int main() {
-    int v[] = {0xCAFEBABE, 0xDEADBEEF, 0x0B00B135, 0xBAADF00D, 0xDEADC0DE};
-
-    return 0;
-}
-```
-
-Afișați adresele elementelor din vectorul `v` împreună cu valorile de la acestea. Parcurgeți, pe rând, adresele din `v` octet cu octet, din doi în doi, respectiv din patru în patru octeți.
-
-> **TIP:** Puteți parcurge memoria octet cu octet începând de la o anumită adresă folosind un pointer de tipul `unsigned char*` (pentru că tipul `char` este reprezentat pe un octet).
->```c
->unsigned char *char_ptr = v;
->```
-> Pentru afișarea adresei, respectiv a valorii puteți folosi:
->```c
->printf("%p -> 0x%x\n", char_ptr, *char_ptr);
->```
-
-### **2. Ștergerea primei apariții a unui pattern dintr-un șir de caractere**
-
-Veți rezolva exercițiul plecând de la fișierul **delete-first.c** aflat în directorul **2-delete-first**.
-
-Dându-se un șir de caractere și un pattern să se implementeze funcția `delete_first(char *s, char *pattern)` care întoarce șirul obținut prin ștergerea primei apariții a pattern-ului în s.
-
-> **NOTE:** Pentru `s = "Ana are mere"` și `pattern = "re"` se va returna șirul "Ana a mere".
-
-> **IMPORTANT:** Atenție
-> ```c
-> char *s = "Ana are mere" se alocă șirul într-o zonă de memorie read-only (conținut nemodificabil);
-> char s[] = "Ana are mere" se alocă șirul într-o zonă de memorie read-write (conținut modificabil);
-> ```
-
-### **3. Pixels**
-
-Veți rezolva exercițiul plecând de la fișierul **pixels.c** aflat în directorul **3-pixels**.
-
-Se consideră structura unui pixel și a unei imagini descrise în fișierul `pixel.h`:
-
-```c
-typedef struct Pixel {
-    unsigned char R;
-    unsigned char G;
-    unsigned char B;
-} Pixel;
-
-typedef struct Picture {
-    int height;
-    int width;
-    Pixel **pix_array;
-} Picture;
-```
-
-Să se implementeze:
-
-1. Funcția `reversePic(Picture *pic)` care primește ca parametru un Picture și întoarce imaginea răsturnată. Prin imagine răsturnată se înțelege inversarea liniilor matricei pix_array din structura lui Picture.
-2. Functia `colorToGray(Picture *pic)` care primește ca parametru un Picture și întoarce noua imagine prin convertirea fiecarui pixel la valoarea sa grayscale. Valoarea grayscale a unui pixel se calculează după urmatoarea formulă:
-
-```c
-p.r = 0.3 * p.r;
-p.g = 0.59 * p.g;
-p.b = 0.11 * p.b;
-```
-
-> **IMPORTANT:**
-> Accesarea elementelor matricei de pixeli se va face folosind operații cu pointeri.
-> **Hint:** Pentru simplificare, vă puteți folosi de urmatorul macro:
-> ```c
-> #define GET_PIXEL(a, i ,j) (*(*(a + i) + j))
-> ```
-
-### **4. Find-Max**
-
-Veți rezolva exercițiul plecând de la fișierul **find-max.c** aflat în directorul **4-find-max**.
-
-Deschideți scheletul de cod și implementați funcțiile:
-```c
-find_max(void *arr, int n, int element_size, int (*compare)(const void *, const void *))
-```
-care calculează elementul maxim dintr-un array pe baza unui criteriu de comparare stabilit.
-```c
-compare(const void *a, const void *b)
-```
-
-### **5. Tutorial GDB: Depanarea unui SEG Fault**
-
-Veți rezolva exercițiul plecând de la fișierul **segfault.c** aflat în directorul **5-segfault**.
-
-Urmăriți și compilați codul sursă din schelet (în cazul în care nu folosiți Makefile-ul, asigurați-vă să compilați sursa cu flag-ul -g . Pe scurt, programul primește un număr n, alocă un vector de dimensiune n pe care-l inițializează cu primele n numere din șirul lui Fibonacci. Totuși, în urma rulării se afisează: Segmentation fault (core dumped).
-
-Porniți cu GDB executabilul:
-
-```bash
-gdb ./segfault
-```
-
-După ce ați pornit programul GDB, toată interacțiunea cu acesta se face prin prompt-ul de GDB. Lansați programul în execuție folosind comanda run. Ce observați? GDB se blochează la citirile de la input.
-
-Setați un breakpoint la main folosind comanda `break main`. Vi se va afișa în prompt mesajul:
-
-```c
-Breakpoint 1 at 0x7d3: file seg.c, line 21 /* Adresa de memorie nu trebuie sa fie aceeași */
-```
-
-În continuare, vom parcurge pas cu pas instrucțiunile. Pentru acest lucru introduceți comanda `next` sau `n` (urmăriți cursorul din GDB pentru a vedea instrucțiunea la care ne aflăm și repetați procedeul). Observăm că GDB se blochează la scanf, introduceți o valoare pentru n și continuați parcurgerea. În cazul în care ați introdus o valoare mare pentru n, pentru a evita iterarea, introduceți comanda continue. Se ajunge la linia `v[423433] = 3`; iar in GDB se afișează mesajul:
-
-```
-Program received signal SIGSEGV, Segmentation fault
-```
-
-Inspectăm memoria de la `v[423433]` folosind `x &v[423433]` și primim mesajul:
-
-```c
-Cannot access memory at address 0x5555558f3e94 /* Adresa de memorie nu trebuie sa fie aceeași */
-```
-
-Ce s-a întamplat? Am accesat o zonă de memorie cu acces restricționat.
-
-### **6. Inspectarea datelor**
-
-Veți rezolva exercițiul plecând de la fișierul **inspect.c** aflat în directorul **6-inspect**.
-
-Se dau următoarele declarații:
-
-```c
-#include <stdio.h>
-
-int main() {
-    unsigned int a = 4127;
-    int b = -27714;
-    short c = 1475;
-    int v[] = {0xCAFEBABE, 0xDEADBEEF, 0x0B00B135, 0xBAADF00D, 0xDEADC0DE};
-
-    unsigned int *int_ptr = (unsigned int *) &v;
-
-    for (int i = 0 ; i < sizeof(v) / sizeof(*int_ptr) ; ++i) {
-        ++int_ptr;
-    }
-
-    return 0;
-}
-```
-
-Compilați codul sursă și porniți executabilul cu GDB. Setați un breakpoint la main și observați cum sunt reprezentate datele în memorie. Pentru acest task vă veți folosi de comenzile `print` și `examine`.
+Dacă programele scrise în limbaje de nivel înalt ajung să fie portate ușor pentru procesoare diferite (arm, powerpc, x86, etc.), cele scrise în limbaj de asamblare sunt implementări specifice unei anumite arhitecturi. Limbaje de nivel înalt reprezintă o formă mai abstractă de rezolvare a unei probleme, din punctul de vedere al unui procesor, motiv pentru care și acestea trebuie traduse în limbaj de asamblare în cele din urmă, pentru a se putea ajunge la un binar care poate fi rulat. Mai multe detalii în laboratoarele următoare.
+
+## Exerciții
+
+> **WARNING:** În cadrul laboratoarelor vom folosi repository-ul de Git de IOCLA: https://github.com/systems-cs-pub-ro/iocla.
+> Repository-ul este clonat pe desktopul mașinii virtuale.
+> Pentru a îl actualiza, folosiți comanda `git pull origin master` din interiorul directorului în care se află repository-ul (`~/Desktop/iocla`).
+> Recomandarea este să îl actualizați cât mai frecvent, înainte să începeți lucrul, pentru a vă asigura că aveți versiunea cea mai recentă.
+> Dacă doriți să descărcați repository-ul în altă locație, folosiți comanda `git clone https://github.com/systems-cs-pub-ro/iocla ${target}`
+> Pentru mai multe informații despre folosirea utilitarului `git`, urmați ghidul de la [Git Immersion](https://gitimmersion.com/).
 
 > **NOTE:**
-> - Pentru a afișa valoarea unei variabile in hexazecimal folosiți `p/x nume_variabilă`
-> - Pentru a afișa valoarea de la un pointer foloșiti `p *nume_pointer`, iar pentru a inspecta datele de la o adresă de memorie folosiți `x adresă`.
+> Cele mai multe dintre exerciții se desfășoară pe o arhitectură x86 (32 de biți, i386).
+> Pentru a putea compila / linka pe 32 de biți atunci când sistemul vostru este pe 64 de biți, aveți nevoie de pachete specifice.
+> Pe o distribuție Debian / Ubuntu, instalați pachetele folosind comanda:
+> ```
+> sudo apt install gcc-multilib libc6-dev-i386
+> ```
 
-### **7. Bonus**
+**Pentru exersarea informațiilor legate de linking, parcurgem mai multe exerciții.**
+**În cea mai mare parte, acestea sunt dedicate observării procesului de linking, cele marcate cu sufixul `-tut` sau `-obs`.**
+**Unele exerciții necesită modificări pentru a repara probleme legate de linking, cele marcate cu sufixul `-fix`, altele au drept scop exersarea unor noțiuni (cele marcate cu sufixul `-diy`) sau dezvoltarea / completarea unor fișiere (cele marcate cu sufixul `-dev`).**
+**Fiecare exercițiu se găsește într-un director indexat; cele mai multe fișiere cod sursă și fișiere `Makefile` sunt deja prezente.**
 
-Veți rezolva exercițiul plecând de la fișierul **pointers.c** aflat în directorul **7-pointers**.
+### 00. Folosirea variabilelor
 
-Să se implementeze funcțiile [memcpy](http://www.cplusplus.com/reference/cstring/memcpy/), [strcpy](http://www.cplusplus.com/reference/cstring/strcpy/) și [strcmp](http://www.cplusplus.com/reference/cstring/strcmp/) folosind operații pe pointeri.
+Accesăm directorul `00-vars-obs/`.
+Vrem să urmărim folosirea variabilelor globale, exportate și neexportate.
 
-### **8. Comenzi utile pwndbg (nu gdb)**
+În fișierul `hidden.c` avem variabila statică (neexportată) `hidden_value`.
+Variabila este modificată și citită cu ajutorul unor funcții neexportate: `init()`, `get()`, `set()`.
 
-Cheatsheet [gdb + pwndbg](https://cheatography.com/superkojiman/cheat-sheets/gdb-pwndbg/) ; pwndbg [features](https://github.com/pwndbg/pwndbg/blob/dev/FEATURES.md)
+În fișierul `plain.c` avem variabila exportată `age`.
+Aceasta poate fi modificată și citită direct.
 
-```py
-pwndbg> show context-sections
-'regs disasm code ghidra stack backtrace expressions'
-# pentru terminale mai mici
-pwndbg> set context-sections 'regs code stack'
-# afișare zonă de memorie în hex + ASCII
-pwndbg> hexdump $ecx
-# afișare stivă
-pwndbg> stack
-# afișare permanentă memory dump 8 octeți
-pwndbg> ctx-watch execute "x/8xb &msg"
+Aceste variabile sunt folosite direct (`age`) sau indirect (`hidden_value`) în fișierul `main.c`.
+Pentru folosirea lor, se declară funcțiile și variabilele în fișierul `ops.h`.
+Declararea unei funcții se face prin precizarea antetului; declararea unei variabile se face prin prefixarea cu `extern`.
 
-# setări recomandate în .gdbinit
-set context-sections 'regs code expressions'
-set show-flags on
-set dereference-limit 1
+**Compilați și rulați programul obținut pe baza fișierelor de mai sus.**
+
+### 01. Linkarea unui singur fișier
+
+Accesăm directorul `01-one-tut/`.
+Vrem să urmărim comenzile de linkare pentru un singur fișier cod sursă C.
+Fișierul sursă este `hello.c`.
+
+În cele trei subdirectoare, se găsesc fișierele de suport pentru următoarele scenarii:
+* `a-dynamic/`: crearea unui fișier executabil dinamic
+* `b-static/`: crearea unui fișier executabil static
+* `c-standalone/`: creare unui fișier executabil standalone, fără biblioteca standard C
+
+**În fiecare subdirector folosim comanda `make` pentru a compila fișierul executabil `hello`.**
+**Folosim comanda `file hello` pentru a urmări daca fișierul este compilat dinamic sau static.**
+
+În fișierele `Makefile`, comanda de linkare folosește `gcc`.
+Este comentată o comandă echivalentă care folosește direct `ld`.
+**Pentru a urmări folosirea directă a `ld`, putem comenta comanda `gcc` și decomenta comanda `ld`. Folosim iarăși comanda `file hello`.**
+
+În cazul `c-standalone/`, pentru că nu folosim biblioteca standard C sau bibliotecă runtime C, trebuie să înlocuim funcționalitățile acestora.
+Funcționalitățile sunt înlocuite în fișierul `start.asm` și `puts.asm`.
+Aceste fișiere implementează, respectiv, funcția / simbolul `_start` și funcția `puts`.
+Funcția / simbolul `_start` este, în mod implicit, entry pointul unui program executabil.
+Funcția `_start` este responsabilă pentru apelul funcției `main` și încheierea programului.
+Pentru că nu există bibliotecă standard, aceste două fișiere sunt scrise în limbaj de asamblare și folosesc apeluri de sistem.
+
+**Adăugați, în fișierul `Makefile` din directorul `c-standalone/`, o comandă care folosește explicit `ld` pentru linkare.**
+
+**Extra**: Accesați directorul `01-one-diy/`.
+Vrem să compilăm și linkăm fișierele cod sursă din fiecare subdirector, asemănător cu ceea ce am făcut anterior. Copiați fișierele `Makefile` și actualizați-le în fiecare subdirector pentru a obține fișierul executabil.
+
+### 02. Linkarea mai multor fișiere
+
+Accesăm directorul `02-multiple-tut/`.
+Vrem să urmărim comenzile de linkare din fișiere multiple cod sursă C: `main.c`, `add.c`, `sub.c`.
+
+La fel ca în exercițiile de mai sus, sunt trei subdirectoare pentru trei scenarii diferite:
+* `a-no-header/`: declararea funcțiilor externe se face direct în fișierul sursă C (`main.c`)
+* `b-header/`: declararea funcțiilor externe se face într-un fișier header separat (`ops.h`)
+* `c-lib/`: declararea funcțiilor externe se face într-un fișier header separat, iar linkarea se face folosind o bibliotecă statică
+
+În fiecare subdirector folosim comanda `make` pentru a compila fișierul executabil `main`.
+
+**Extra**: Accesați directorul `02-multiple-diy/`.
+Vrem să compilăm și linkăm fișierele cod sursă din fiecare subdirector, asemănător cu ceea ce am făcut anterior. Copiați fișierele `Makefile` și actualizați-le în fiecare subdirector pentru a obține fișierul executabil.
+
+### 03. Repararea entry pointului
+
+Accesați directorul `03-entry-fix/`.
+Vrem să urmărim probleme de definire a funcției `main()`.
+
+Accesați subdirectorul `a-c/`.
+Rulați comanda `make`, interpretați eroarea întâlnită și rezolvați-o prin editarea fișierului `hello.c`.
+
+Accesați subdirectorul `b-asm/`.
+Rulați comanda `make`, interpretați eroarea întâlnită și rezolvați-o prin editarea fișierului `hello.asm`.
+
+În subdirectoarele `c-extra-nolibc/` și `d-extra-libc/` veți găsi soluții care nu modifică codul sursă al `hello.c`.
+Aceste soluții modifică, în schimb, sistemul de build pentru a folosi altă funcție, diferită de `main()`, ca prima funcție a programului.
+
+**Extra**: Accesați directorul `03-entry-2-fix/`.
+Rulați comanda `make`, interpretați eroarea întâlnită și rezolvați-o prin editarea fișierului `hello.c`.
+
+### 04. Folosire simboluri (variabile și funcții)
+
+Accesați directorul `04-var-func-fix/`.
+Rulați comanda `make` și rulați executabilul obținut. Interpretați erorile/eroarea întâlnite/întâlnită și rezolvați-le/rezolvați-o prin editarea fișierelor sursă.
+
+### 05. Reparare problemă cu bibliotecă
+
+Accesați directorul `05-lib-fix/`.
+Rulați comanda `make`, interpretați eroarea întâlnită și rezolvați-o prin editarea fișierului `Makefile`.
+Urmăriți fișierul `Makefile` din directorul `02-multiple-tut/c-lib/`.
+
+### 06. Linkare fișier obiect (fără fișier cod sursă)
+
+Accesați directorul `06-obj-link-dev/`.
+Fișierul `shop.o` expune o interfață (funcții și variabile) care permite afișarea unor mesaje.
+Editați fișierul `main.c` pentru a apela corespunzător interfața expusă și pentru a afișa mesajele:
+```
+price is 21
+quantity is 42
 ```
 
-### Soluții
+Explorați interfața și conținutul funcțiilor din fisierul `shop.o` folosind `nm` și `objdump`.
 
-Soluțiile pentru exerciții sunt disponibile [aici](https://elf.cs.pub.ro/asm/res/laboratoare/lab-02-sol.zip).
+### Bonus. Utilizare cod python în C
+
+> **INFO:**
+> În cadrul acestui exercițiu veți vedea un exemplu de ceea ce se poate face în urma legării unui anumit tip de fișiere obiect, și anume biblioteci; pentru acest exercițiu este vorba de biblioteca python$(PYTHON_VERSION), unde **PYTHON_VERSION** poate să fie diferit în funcție de soluția propusă de fiecare.
+> Pentru a putea să compilați surse veți avea nevoie de versiunea de dezvoltare pentru python; pentru instalare folosiți comanda de mai jos:
+> ```
+> sudo apt-get install python$(PYTHON_VERSION)-dev
+> ```
+> Înlocuiți $(PYTHON_VERSION) cu versiunea pe care o doriți(**3.8 sau mai recentă**)
+
+Accesați directorul `bonus-c-python`.
+Fișierul main.c are un exemplu de cum se execută o funcție simplă de afișare a unui mesaj scrisă într-un modul python separat. Plecând de la exemplul prezentat, creați o funcție în modulul numit `my_module.py` aflat în directorul `python-modules`, care primește doi parametri reprezentând două șiruri de caractere și întoarce **poziția primei apariții a celui de-al doilea șir în cadrul primului**, dacă al doilea șir este un subșir al primului șir și **-1** în caz contrar.
+<pre>
+Dacă funcția creată este denumită <b>subsir</b> atunci <b>subsir('123456789', '89')</b> va întoarce 7 iar <b>subsir('123', '4')</b> va întoarce -1. Practic semnătura este de forma <b>subsir(haystack, needle)</b>.
+</pre>
+
+Rezultatul funcției scrisă în python va fi preluat în codul C și se va afișa un mesaj corespunzător. Urmăriți comentariile cu **TODO** din fișierele `main.c` și `my_module.py`.
+
+> **NOTE:**
+> Puteți să urmăriți și exemplele de [aici](https://www.codeproject.com/Articles/820116/Embedding-Python-program-in-a-C-Cplusplus-code) și/sau [aici](https://www.xmodulo.com/embed-python-code-in-c.html) pentru a vedea cum să preluați rezultatul funcției scrisă în python. De asemenea puteți consulta documentația de [aici](https://docs.python.org/3/c-api/long.html) pentru a vedea cum să faceți conversia rezultatului la un tip de date din C.
+
+> **NOTE:**
+> Atenție la versiunea de python pe care o folosiți; nu este recomandată o anumită versiune însă trebuie să aveți în vedere că în funcție de soluția voastră este posibil să fie nevoie să folosiți versiune specifică. Makefile-ul folosește versiunea **3.9**.
