@@ -1,4 +1,4 @@
-# Laborator 04: Introducere în limbajul de asamblare
+# Laborator 05: Introducere în limbajul de asamblare
 
 În acest laborator, vom prezenta o parte din instrucțiunile x86, precum și o suită de exemple introductive. 
 
@@ -267,4 +267,4 @@ Calculați al N-lea număr Fibonacci, unde N este dat prin intermediul registrul
 
 ## Soluții
 
-Soluțiile pentru exerciții sunt disponibile [aici](https://elf.cs.pub.ro/asm/res/laboratoare/lab-04-sol.zip). 
+Soluțiile pentru exerciții sunt disponibile [aici](https://elf.cs.pub.ro/asm/res/laboratoare/lab-05-sol.zip). 
