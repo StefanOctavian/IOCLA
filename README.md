@@ -1,484 +1,270 @@
-# Laborator 03: Compilare
+# Laborator 04: Introducere în limbajul de asamblare
 
-Etapele prin care trece un program scris în `C` din momentul în care este scris până când este rulat ca un proces sunt, in ordine:
+În acest laborator, vom prezenta o parte din instrucțiunile x86, precum și o suită de exemple introductive. 
 
-- preprocesare
-- compilare
-- asamblare
-- link editare
+## Introducere
 
-În imaginea de mai jos sunt reprezentate si detaliate aceste etape:
+Înainte de a începe efectiv să învățăm să citim cod scris în limbaj de asamblare, iar apoi să scriem primele noastre programe, trebuie să răspundem la câteva întrebări. 
 
-![phases-full.png](https://ocw.cs.pub.ro/courses/_media/iocla/laboratoare/phases-full.png?cache=)
+### Ce este un limbaj de asamblare?
 
-## Preprocesare
+După cum probabil știți, rolul de bază al unui calculator - în speță, al procesorului - este de a citi, interpreta și executa instrucțiuni. Aceste instrucțiuni sunt codificate în cod mașină.
 
-În cadrul primei etape, cea de `preprocesare` au loc următoarele acțiuni plecând de la fișierul cod sursă:
-* eliminarea comentariilor
-* expandarea directivelor care încep cu simbolul `#`
-    * înlocuirea valorilor corespunzătoare pentru `#define ...`
-    * includerea conținutului fișierelor date ca parametru directivei `#include`
-
-## Compilare
-
-În etapa de `compilare` au loc următoarele subetape:
-* analiza lexicală - verificarea limbajului
-* analiza sintactică - verificarea ordinii cuvintelor (`;` vine la finalul asignării unei variabile)
-* analiza semantică - determinarea sensului codului scris (determinarea contextului variabilelor)
-* generarea de cod în limbaj de asamblare care este o formă human-readable a ce ajunge procesorul să execute efectiv
-
-## Assembly / Asamblare
-
-Assembly / Asamblare este penultima etapă a procesului de compilare în sens larg.
-În urma finalizării acestei etape rezultatul va fi crearea a unul sau mai multe fișiere obiect. Fișierele obiect pot conține mai multe lucruri,
-printre care:
-1. nume de simboluri
-1. constante folosite în cadrul programului
-1. cod compilat
-1. valori de tip import/export care vor fi „rezolvate” în etapa de linking
-
-Pentru a crea un fișier obiect în cazul în care se utilizează compilatorul `gcc` se folosește opțiunea `-c` așa cum puteți vedea și în secțiunea [Invocarea linker-ului](#invocarea-linker-ului) de mai jos.
-
-## Linking / Legare
-
-Linking / Legare este ultima etapă a procesului de compilare în sens larg.
-La finalul acestei etape va rezulta un fișier executabil prin unificarea(„legarea”) mai multor fișiere obiect care pot avea la bază limbaje de 
-programare de nivel înalt diferite; tot ceea ce contează este ca fișierele obiect să fie create în mod corespunzător pentru ca linker-ul să le 
-poată „interpreta”.
-
-Pentru a obține un fișier executabil din fișiere obiect, linker-ul realizează următoarele acțiuni:
-1. rezolvarea simbolurilor (*symbol resolution*): localizarea simbolurilor nedefinite ale unui fișier obiect în alte fișiere obiect
-1. unificarea secțiunilor: unificarea secțiunilor de același tip din diferite fișiere obiect într-o singură secțiune în fișierul executabil
-1. stabilirea adreselor secțiunilor și simbolurilor (*address binding*): după unificare se pot stabili adresele efective ale simbolurilor în cadrul fișierului executabil
-1. relocarea simbolurilor (*relocation*): odată stabilite adresele simbolurilor, trebuie actualizate, în executabil, instrucțiunile și datele care referă adresele acelor simboluri
-1. stabilirea unui punct de intrare în program (*entry point*): adică adresa primei instrucțiuni ce va fi executată
-
-## Invocarea linker-ului
-
-Linker-ul este, în general, invocat de utilitarul de compilare (`gcc`, `clang`, `cl`).
-Astfel, invocarea linker-ului este transparentă utilizatorului.
-În cazuri specifice, precum crearea unei imagini de kernel sau imagini pentru sisteme încorporate, utilizatorul va invoca direct linkerul.
-
-Dacă avem un fișier `app.c` cod sursă C, vom folosi compilatorul pentru a obține fișierul obiect `app.o`:
+Un exemplu ar fi: 
 ```
-gcc -c -o app.o app.c
-```
-Apoi pentru a obține fișierul executabil `app` din fișierul obiect `app.o`, folosim tot utilitarul `gcc`:
-```
-gcc -o app app.o
-```
-În spate, `gcc` va invoca linker-ul și va construi executabilul `app`.
-Linker-ul va face legătura și cu biblioteca standard C (libc).
-
-Procesul de linking va funcționa doar dacă fișierul `app.c` are definită funcția `main()`, funcția principală a programului.
-Fișierele linkate trebuie să aibă o singură funcție `main()` pentru a putea obține un executabil.
-
-Dacă avem mai multe fișiere sursă C, invocăm compilatorul pentru fiecare fișier și apoi linker-ul:
-```
-gcc -c -o helpers.o helpers.c
-gcc -c -o app.o app.c
-gcc -o app app.o helpers.o
-```
-Ultima comandă este comanda de linking, care leagă fișierele obiect `app.o` și `helpers.o` în fișierul executabil `app`.
-
-În cazul fișierelor sursă C++, vom folosi comanda `g++`:
-```
-g++ -c -o helpers.o helpers.cpp
-g++ -c -o app.o app.cpp
-g++ -o app app.o helpers.o
-```
-Putem folosi și comanda `gcc` pentru linking, cu precizarea linkării cu biblioteca standard C++ (libc++):
-```
-gcc -o app app.o helpers.o -lstdc++
+1011000000001100011001100011000111011111111111100100
 ```
 
-Utilitarul de linkare este, în Linux, `ld` și este invocat în mod transparent de `gcc` sau `g++`.
-Pentru a vedea cum este invocat linker-ul, folosim opțiunea `-v` a utilitarului `gcc`, care va avea un rezultat asemănător cu:
-```
-/usr/lib/gcc/x86_64-linux-gnu/7/collect2 -plugin /usr/lib/gcc/x86_64-linux-gnu/7/liblto_plugin.so
--plugin-opt=/usr/lib/gcc/x86_64-linux-gnu/7/lto-wrapper -plugin-opt=-fresolution=/tmp/ccwnf5NM.res
--plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lgcc_s -plugin-opt=-pass-through=-lc
--plugin-opt=-pass-through=-lgcc -plugin-opt=-pass-through=-lgcc_s --build-id --eh-frame-hdr -m elf_i386 --hash-style=gnu
---as-needed -dynamic-linker /lib/ld-linux.so.2 -z relro -o hello
-/usr/lib/gcc/x86_64-linux-gnu/7/../../../i386-linux-gnu/crt1.o
-/usr/lib/gcc/x86_64-linux-gnu/7/../../../i386-linux-gnu/crti.o /usr/lib/gcc/x86_64-linux-gnu/7/32/crtbegin.o
--L/usr/lib/gcc/x86_64-linux-gnu/7/32 -L/usr/lib/gcc/x86_64-linux-gnu/7/../../../i386-linux-gnu
--L/usr/lib/gcc/x86_64-linux-gnu/7/../../../../lib32 -L/lib/i386-linux-gnu -L/lib/../lib32 -L/usr/lib/i386-linux-gnu
--L/usr/lib/../lib32 -L/usr/lib/gcc/x86_64-linux-gnu/7 -L/usr/lib/gcc/x86_64-linux-gnu/7/../../../i386-linux-gnu
--L/usr/lib/gcc/x86_64-linux-gnu/7/../../.. -L/lib/i386-linux-gnu -L/usr/lib/i386-linux-gnu hello.o -lgcc --push-state
---as-needed -lgcc_s --pop-state -lc -lgcc --push-state --as-needed -lgcc_s --pop-state
-/usr/lib/gcc/x86_64-linux-gnu/7/32/crtend.o /usr/lib/gcc/x86_64-linux-gnu/7/../../../i386-linux-gnu/crtn.o
-COLLECT_GCC_OPTIONS='-no-pie' '-m32' '-v' '-o' 'hello' '-mtune=generic' '-march=i686'
-```
-Utilitarul `collect2` este, de fapt, un wrapper peste utilitarul `ld`.
-Rezultatul rulării comeznii este unul complex.
-O invocare "manuală" a comenzii `ld` ar avea forma:
-```
-ld -dynamic-linker /lib/ld-linux.so.2 -m elf_i386 -o app /usr/lib32/crt1.o /usr/lib32/crti.o app.o helpers.o -lc /usr/lib32/crtn.o
-```
-Argumentele comenzii de mai sus au semnificația:
-* `-dynamic-linker /lib/ld-linux.so.2`: precizează loaderul / linkerul dinamic folosit pentru încărcarea executabilului dinamic
-* `-m elf_i386`: se linkează fișiere pentru arhitectura x86 (32 de biți, i386)
-* `/usr/lib32/crt1.o`, `/usr/lib32/crti.o`, `/usr/lib32/crtn.o`: reprezintă biblioteca de runtime C (`crt` - *C runtime*) care oferă suportul necesar pentru a putea încărca executabilul
-* `-lc`: se linkează biblioteca standard C (libc)
+Această secvență de biți nu ne spune nimic în mod deosebit. Putem să facem o conversie în baza 16 pentru a o comprima și grupa mai bine. 
 
-## Inspectarea fișierelor
-
-Pentru a urmări procesul de linking, folosim utilitare de analiză statică precum `nm`, `objdump`, `readelf`.
-
-Folosim utilitarul `nm` pentru a afișa simbolurile dintr-un fișier obiect sau un fișier executabil:
 ```
-$ nm hello.o
-00000000 T main
-         U puts
-
-$ nm hello
-0804a01c B __bss_start
-0804a01c b completed.7283
-0804a014 D __data_start
-0804a014 W data_start
-08048370 t deregister_tm_clones
-08048350 T _dl_relocate_static_pie
-080483f0 t __do_global_dtors_aux
-08049f10 t __do_global_dtors_aux_fini_array_entry
-0804a018 D __dso_handle
-08049f14 d _DYNAMIC
-0804a01c D _edata
-0804a020 B _end
-080484c4 T _fini
-080484d8 R _fp_hw
-08048420 t frame_dummy
-08049f0c t __frame_dummy_init_array_entry
-0804861c r __FRAME_END__
-0804a000 d _GLOBAL_OFFSET_TABLE_
-         w __gmon_start__
-080484f0 r __GNU_EH_FRAME_HDR
-080482a8 T _init
-08049f10 t __init_array_end
-08049f0c t __init_array_start
-080484dc R _IO_stdin_used
-080484c0 T __libc_csu_fini
-08048460 T __libc_csu_init
-         U __libc_start_main@@GLIBC_2.0
-08048426 T main
-         U puts@@GLIBC_2.0
-080483b0 t register_tm_clones
-08048310 T _start
-0804a01c D __TMC_END__
-08048360 T __x86.get_pc_thunk.bx
+\xB0\x0C\x66\x31\xD2\xFF\xE4
 ```
 
-Comanda `nm` afișează trei coloane:
-* adresa simbolului
-* secțiunea și tipul unde se găsește simbolul
-* numele simbolului
+În continuare, pentru mulți dintre noi nu spune nimic această secvență. De aici vine necesitatea unui limbaj mai ușor de înțeles și utilizat.
 
-Un simbol este numele unei variabile globale sau a unei funcții.
-Este folosit de linker pentru a face conexiunile între diferite module obiect.
-Simbolurile nu sunt necesare pentru executabile, de aceea executabilele pot fi stripped.
+Limbajul de asamblare ne permite să scriem programe text care mai departe vor fi traduse, prin intermediul unui utilitar numit asamblor, specific fiecărei arhitecturi, în cod mașină. Majoritatea limbajelor de asamblare asigură o corespondență directă între instrucțiuni. De exemplu: 
 
-Adresa simbolului este, de fapt, offsetul în cadrul unei secțiuni pentru fișierele obiect.
-Și este adresa efectivă pentru executabile.
-
-A doua coloana precizează secțiunea și tipul simbolului.
-Dacă este vorba de majusculă, atunci simbolul este exportat, este un simbol ce poate fi folosit de un alt modul.
-Dacă este vorba de literă mică, atunci simbolul nu este exportat, este propriu modulului obiect, nefolosibil în alte module.
-Astfel:
-* `d`: simbolul este în zona de date inițializate (`.data`), neexportat
-* `D`: simbolul este în zona de date inițializate (`.data`), exportat
-* `t`: simbolul este în zona de cod (`.text`), neexportat
-* `T`: simbolul este în zona de cod (`.text`), exportat
-* `r`: simbolul este în zona de date read-only (`.rodata`), neexportat
-* `R`: simbolul este în zona de date read-only (`.rodata`), exportat
-* `b`: simbolul este în zona de date neinițializate (`.bss`), neexportat
-* `B`: simbolul este în zona de date neinițializate (`.bss`), exportat
-* `U`: simbolul este nedefinit (este folosit în modulul curent, dar este definit în alt modul)
-
-Alte informații se găsesc în pagina de manual a utilitarul `nm`.
-
-Cu ajutorul comenzii `objdump` dezasamblăm codul fișierelor obiect și a fișierelor executabile.
-Putem vedea, astfel, codul în limbaj de asamblare și funcționarea modulelor.
-
-Comanda `readelf` este folosită pentru inspectarea fișierelor obiect sau executabile.
-Cu ajutorul comenzii `readelf` putem să vedem headerul fișierelor.
-O informație importantă în headerul fișierelor executabile o reprezintă entry pointul, adresa primei instrucțiuni executate:
-```
-$ readelf -h hello
-ELF Header:
-  Magic:   7f 45 4c 46 01 01 01 00 00 00 00 00 00 00 00 00
-  Class:                             ELF32
-  Data:                              2's complement, little endian
-  Version:                           1 (current)
-  OS/ABI:                            UNIX - System V
-  ABI Version:                       0
-  Type:                              EXEC (Executable file)
-  Machine:                           Intel 80386
-  Version:                           0x1
-  Entry point address:               0x8048310
-  Start of program headers:          52 (bytes into file)
-  Start of section headers:          8076 (bytes into file)
-  Flags:                             0x0
-  Size of this header:               52 (bytes)
-  Size of program headers:           32 (bytes)
-  Number of program headers:         9
-  Size of section headers:           40 (bytes)
-  Number of section headers:         35
-  Section header string table index: 34
+```assembly
+mov al, 12 <-> '\xB0\x0C'
+xor dx, dx <-> '\x67\x31\xD2'
+jmp esp    <-> '\xFF\xE4'
 ```
 
-Cu ajutorul comenzii `readelf` putem vedea secțiunile unui executabil / fișier obiect:
+> **NOTE**: Deoarece limbajul de asamblare depinde de arhitectură, în general nu este portabil. De aceea, producătorii de procesoare au încercat să păstreze neschimbate instrucțiunile de la o generație la alta, adăugându-le pe cele noi, pentru a păstra măcar compatibilitatea în cadrul aceleiași familii de procesoare (de exemplu, procesoarele Intel 80286, 80386, 80486 etc. fac parte din genericul Intel x86).
+
+### De ce să învăț limbaj de asamblare?
+Pe lângă valoarea didactică foarte mare, în care înțelegeți în ce constă “stack overflow”, reprezentarea datelor și ce e specific procesorului cu care lucrați, există câteva aplicații în care cunoașterea limbajului de asamblare și, implicit, a arhitecturii sunt necesare sau chiar critice. 
+
+#### Debugging
+Este destul de probabil ca cel puțin unul din programele pe care le-ați scris în trecut să genereze următorul rezultat: 
 ```
-$ readelf -S hello
-There are 35 section headers, starting at offset 0x1f8c:
-Section Headers:
-  [Nr] Name              Type            Addr     Off    Size   ES Flg Lk Inf Al
-  [ 0]                   NULL            00000000 000000 000000 00      0   0  0
-  [ 1] .interp           PROGBITS        08048154 000154 000013 00   A  0   0  1
-  [ 2] .note.ABI-tag     NOTE            08048168 000168 000020 00   A  0   0  4
-  [ 3] .note.gnu.build-i NOTE            08048188 000188 000024 00   A  0   0  4
-[...]
+Segmentation fault
 ```
 
-Tot cu ajutorul comenzii `readelf` putem lista (*dump*) conținutul unei anumite secțiuni:
+Uneori, veți fi întâmpinați de o serie de date similare cu cele de mai jos: 
+
 ```
-$ readelf -x .rodata hello
-
-Hex dump of section '.rodata':
-  0x080484d8 03000000 01000200 48656c6c 6f2c2057 ........Hello, W
-  0x080484e8 6f726c64 2100                       orld!.
-```
-
-Majoritatea compilatoarelor oferă opțiunea de a genera și un fișier cu programul scris în limbaj de asamblare.
-
->**NOTE**: În cazul compilatorului `gcc` este de ajuns să adăugați flag-ul `-S` și vă va genera un
-fișier `*.s` cu codul aferent. În arhiva de `TODO` aveți un exemplu de trecere a unui program
-foarte simplu `hello.c` prin cele patru faze. Îl puteți testa pe un sistem Unix/Linux și pe un sistem Windows cu suport de MinGW.
-```shell
-$ make
-cc  -E -o hello.i hello.c
-cc -Wall -S -o hello.s hello.i
-cc  -c -o hello.o hello.s
-cc  -o hello hello.o
-
-$ ls
-Makefile  hello  hello.c  hello.i  hello.o  hello.s
-
-$ ./hello
-Hello, World!
-
-$ tail -10 hello.i
-
-
-# 5 "hello.c"
-int main(void)
-{
- puts("Hello, World!");
-
- return 0;
-}
-
-$ cat hello.s
-	.file	"hello.c"
-	.section	.rodata
-.LC0:
-	.string	"Hello, World!"
-	.text
-	.globl	main
-	.type	main, @function
-main:
-.LFB0:
-	.cfi_startproc
-	pushq	%rbp
-	.cfi_def_cfa_offset 16
-	.cfi_offset 6, -16
-	movq	%rsp, %rbp
-	.cfi_def_cfa_register 6
-	movl	$.LC0, %edi
-	call	puts
-	movl	$0, %eax
-	popq	%rbp
-	.cfi_def_cfa 7, 8
-	ret
-	.cfi_endproc
-.LFE0:
-	.size	main, .-main
-	.ident	"GCC: (Debian 5.2.1-17) 5.2.1 20150911"
-	.section	.note.GNU-stack,"",@progbits
-
-$ file hello.o
-hello.o: ELF 64-bit LSB relocatable, x86-64, [...]
-
-$ file hello
-hello: ELF 64-bit LSB executable, x86-64, [...]
-
-$ objdump -d hello.o
-
-hello.o:     file format elf64-x86-64
-
-
-Disassembly of section .text:
-
-0000000000000000 <main>:
-   0:	55                   	push   %rbp
-   1:	48 89 e5             	mov    %rsp,%rbp
-   4:	bf 00 00 00 00       	mov    $0x0,%edi
-   9:	e8 00 00 00 00       	callq  e <main+0xe>
-   e:	b8 00 00 00 00       	mov    $0x0,%eax
-  13:	5d                   	pop    %rbp
-  14:	c3                   	retq
+Page Fault cr2=10000000 at eip e75; flags=6
+eax=00000030 ebx=00000000 ecx=0000000c edx=00000000
+esi=0001a44a edi=00000000 ebp=00000000 esp=00002672
+cs=18 ds=38 es=af fs=0 gs=0 ss=20 error=0002
 ```
 
-Pentru a genera sintaxa intel pe 32 de biți, se pot folosi aceste opțiuni:
-```shell
-cc -Wall -m32 -S -masm=intel  -o hello.s hello.i
-```
+Pentru cineva care cunoaște limbaj de asamblare, e relativ ușor să se apuce să depaneze problema folosind un debugger precum [GDB](http://www.gnu.org/software/gdb/) sau [OllyDbg](http://www.ollydbg.de/),  deoarece mesajul îi furnizează aproape toate informațiile de care are nevoie. 
 
-Dacă programele scrise în limbaje de nivel înalt ajung să fie portate ușor pentru procesoare diferite (arm, powerpc, x86, etc.), cele scrise în limbaj de asamblare sunt implementări specifice unei anumite arhitecturi. Limbaje de nivel înalt reprezintă o formă mai abstractă de rezolvare a unei probleme, din punctul de vedere al unui procesor, motiv pentru care și acestea trebuie traduse în limbaj de asamblare în cele din urmă, pentru a se putea ajunge la un binar care poate fi rulat. Mai multe detalii în laboratoarele următoare.
+#### Optimizare de cod
+Gândiți-vă cum ați scrie un program C care să realizeze criptare și decriptare [AES](csrc.nist.gov/publications/fips/fips197/fips-197.pdf). Apoi, indicați compilatorului faptul că doriți să vă optimizeze codul. Evaluați performanța codului respectiv (dimensiune, timp de execuție, număr de instrucțiuni de salt etc.). Deși compilatoarele sunt deseori trecute la categoria “magie neagră”, există situații în care pur și simplu știți [ceva](https://software.intel.com/content/www/us/en/develop/home.html) despre procesorul pe care lucrați mai bine ca acestea.
+
+Mai mult, e suficient să înțelegeți cod asamblare pentru a putea evalua un cod și optimiza secțiunile critice ale acestuia. Chiar dacă nu veți programa în limbaj de asamblare, veți fi conștienți de codul ce va fi generat de pe urma instrucțiunilor C pe care le folosiți. 
+
+#### Reverse engineering
+
+O mare parte din aplicațiile uzuale sunt closed-source. Tot ce aveți când vine vorba de aceste aplicații este un fișier deja compilat, binar. Există posibilitatea ca unele dintre acestea să conțină cod malițios, caz în care trebuie analizate într-un mediu controlat (malware analysis/research).
+
+#### Embedded și altele
+
+Există cazuri în care se impun constrângeri asupra dimensiunii codului și/sau datelor, cum este cazul device-urilor specializate pentru un singur task, având puțină memorie. Din această categorie fac parte și driverele pentru dispozitive.
+
+#### Fun
+
+Pentru mai multe detalii, discutați cu asistentul vostru de laborator pentru a vă împărtăși experiența lui personală în materie de limbaj de asamblare și cazurile practice de utilizare folosite.
+
+## Familia x86
+
+Aproape toate procesoarele importante de la Intel împart un ISA (instruction set architecture) comun. Aceste procesoare sunt puternic backwards compatible, având mare parte din instrucțiuni neschimbate de-a lungul generațiilor, ci doar adăugate sau extinse.
+
+> **NOTE**: Un ISA definește instrucțiunile pe care le suportă un procesor, dimensiunea registrelor, moduri de adresare, tipurile de date, formatul instrucțiunilor, întreruperile și organizarea memoriei. 
+Procesoarele din această familie intră în categoria largă de CISC (Complex Instruction Set Computers). Filozofia din spatele lor este de a avea un număr mare de instrucțiuni, cu lungime variabilă, capabile să efectueze operații complexe, în mai mulți cicli de ceas. 
+
+### Registre
+
+Unitățile de lucru de bază pentru procesoarele x86 sunt registrele. Acestea sunt o suită de locații în cadrul procesorului prin intermediul cărora acesta interacționează cu memoria, I/O etc.
+
+Procesoarele x86 au 8 astfel de registre de 32 de biți. Deși oricare dintre acestea poate fi folosit în cadrul operațiilor, din motive istorice, fiecare registru are un rol anume. 
+
+Nume | Rol
+---- | ---
+EAX | acumulator; apeluri de sistem, I/O, aritmetică
+EBX | registru de bază; folosit pentru adresarea bazată a memoriei
+ECX | contor în cadrul instrucțiunilor de buclare
+EDX | registru de date; I/O, aritmetică, valori de întrerupere; poate extinde EAX la 64 de biți
+ESI | sursă în cadrul operațiilor pe stringuri
+EDI | destinație în cadrul operațiilor pe stringuri
+EBP | base sau frame pointer; indică spre cadrul curent al stivei
+ESP | stack pointer; indică spre vârful stivei
+
+Pe lângă acestea, mai există câteva registre speciale care nu pot fi accesate direct de către programator, cum ar fi EFLAGS și EIP (instruction pointer).
+
+EIP este un registru în care se găsește adresa instrucțiunii curente, care urmează să fie executată. El nu poate fi modificat direct, programatic, ci indirect prin instrucțiuni de jump, call și ret.
+
+Registrul EFLAGS conține 32 de biți folosiți pe post de indicatori de stare sau variabile de condiție. Spunem că un indicator/flag este setat dacă valoarea lui este 1. Cei folosiți de către programatori în mod uzual sunt următorii: 
+
+Nume | Nume extins | Descriere
+---- | ----------- | ---------
+CF |	Carry Flag | Setat dacă rezultatul depășește valoarea întreagă maximă (sau minimă) reprezentabilă pe numere **unsigned**
+PF |	Parity Flag |	Setat dacă byte-ul low al rezultatului conține un număr par de biți de 1
+AF |	Auxiliary Carry Flag |	Folosit în aritmetică BCD; setat dacă bitul 3 generează carry sau borrow
+ZF |	Zero Flag |	Setat dacă rezultatul instrucțiunii precedente este 0
+SF |	Sign Flag |	Are aceeași valoare cu a bitului de semn din cadrul rezultatului (1 negativ, 0 pozitiv)
+OF |	Overflow Flag |	Setat dacă rezultatul depășește valoarea întreagă maximă (sau minimă) reprezentabilă pe numere **signed**
+
+> **NOTE**: Dacă urmăriți evoluția registrelor de la 8086, veți vedea că inițial se numeau AX, BX, CX etc. și aveau dimensiunea de 16 biți. De la 80386, Intel a extins aceste registre la 32 biți (i.e. “extended” AX → EAX). 
+
+### Clase de instrucțiuni
+
+Deși setul curent de instrucțiuni pentru procesoarele Intel are proporții [biblice](https://www.intel.com/content/dam/www/public/us/en/documents/manuals/64-ia-32-architectures-software-developer-instruction-set-reference-manual-325383.pdf), noi ne vom ocupa de un [subset](http://css.csail.mit.edu/6.858/2015/readings/i386.pdf) din acestea, și anume, o parte dintre instrucțiunile 80386.
+
+Toate instrucțiunile procesoarelor x86 se pot încadra în 3 categorii: transfer de date, aritmetice/logice și de control. Vom enumera doar câteva instrucțiuni reprezentative, deoarece multe dintre ele se aseamănă.
+
+#### Instrucțiuni de transfer de date
+
+Nume | Operanzi | Descriere
+---- | -------- | --------- 
+mov |	dst, src |	Mută valoarea din sursă peste destinație
+push |	src |	Mută valoarea din sursă în vârful stivei
+pop |	dst |	Mută valoarea din vârful stivei în destinație
+lea |	dst, src |	Încarcă adresa efectivă a sursei în destinație
+xchg |	dst, src |	Interschimbă valorile din sursă și destinație
+
+#### Instrucțiuni aritmetice și logice
+
+Nume | Operanzi | Descriere
+---- | -------- | --------- 
+add |	dst, src |	Adună sursa cu destinația; rezultatul se scrie la destinație
+sub |	dst, src |	Se scade din destinație sursa și se reține în destinație rezultatul
+and |	dst, src |	Se efectuează operația de ȘI logic între sursă și destinație și se reține rezultatul în destinație
+test |	dst, src |	Se efectuează operația de ȘI logic între sursă și destinație fără a se reține rezultatul undeva
+shl |	dst, `<const>` | 	Se face shiftare logică la stânga a destinației cu un număr constant de poziții
+
+#### Instrucțiuni de control
+
+Nume | Operanzi | Descriere
+---- | -------- | --------- 
+jmp |	<adresă> |	Efectuează salt necondiționat la adresa indicată (direct, prin registru, prin etichete)
+cmp |	dst, src |	Compară sursa cu destinația (detalii mai jos)
+jcondiție |	<adresă> |	Efectuează salt condiționat, în funcție de valoarea flagului/variabilei de condiție
+call |	<adresă> |	Face apel la subrutina care se găsește la adresa indicată 
+
+> **NOTE**: [Instrucțiunea 'cmp dest, src'](https://www.felixcloutier.com/x86/cmp) realizează în spate operația dest - src (adică scade din destinație sursa); este vorba de o scădere cu semn. Fără a reține rezultatul. Astfel, în cazul codului:
+>
+> ```assembly
+>     cmp eax, 0
+>     jl negative
+> ```
+
+> se va face saltul la eticheta `negative` dacă eax este mai mic decât `0`. Se face operația `eax - 0` și dacă rezultatul este negativ (adică dacă eax este negativ) se face saltul.
+
+> Atunci când avem comparații cu `0` (zero), același lucru se poate face mai eficient folosind instrucțiunea `test`:
+>
+> ```assembly
+>     test eax, eax
+>     jl negative
+> ```
+>
+>Alte detalii [aici](https://en.wikibooks.org/wiki/X86_Assembly/Control_Flow#Comparison_Instructions).
 
 ## Exerciții
 
-> **WARNING:** În cadrul laboratoarelor vom folosi repository-ul de Git de IOCLA: https://github.com/systems-cs-pub-ro/iocla.
-> Repository-ul este clonat pe desktopul mașinii virtuale.
-> Pentru a îl actualiza, folosiți comanda `git pull origin master` din interiorul directorului în care se află repository-ul (`~/Desktop/iocla`).
-> Recomandarea este să îl actualizați cât mai frecvent, înainte să începeți lucrul, pentru a vă asigura că aveți versiunea cea mai recentă.
-> Dacă doriți să descărcați repository-ul în altă locație, folosiți comanda `git clone https://github.com/systems-cs-pub-ro/iocla ${target}`
-> Pentru mai multe informații despre folosirea utilitarului `git`, urmați ghidul de la [Git Immersion](https://gitimmersion.com/).
+> **IMPORTANT**: În cadrul laboratoarelor vom folosi repository-ul de git al materiei IOCLA - (https://github.com/systems-cs-pub-ro/iocla). Repository-ul este clonat pe desktop-ul mașinii virtuale. Pentru a îl actualiza, folosiți comanda `git pull origin master` din interiorul directorului în care se află repository-ul (`~/Desktop/iocla`). Recomandarea este să îl actualizați cât mai frecvent, înainte să începeți lucrul, pentru a vă asigura că aveți versiunea cea mai recentă. Dacă doriți să descărcați repository-ul în altă locație, folosiți comanda `git clone https://github.com/systems-cs-pub-ro/iocla ${target}`. Pentru mai multe informații despre folosirea utilitarului `git, urmați ghidul de la [Git Immersion](https://gitimmersion.com/).
 
-> **NOTE:**
-> Cele mai multe dintre exerciții se desfășoară pe o arhitectură x86 (32 de biți, i386).
-> Pentru a putea compila / linka pe 32 de biți atunci când sistemul vostru este pe 64 de biți, aveți nevoie de pachete specifice.
-> Pe o distribuție Debian / Ubuntu, instalați pachetele folosind comanda:
+> **IMPORTANT**: Pentru a afișa valorile din registre vom folosi macro-ul `PRINTF32` dezvoltat de Dragoș Niculescu până veți învăța cum se efectuează apelurile de funcții. Acesta permite afișarea de valori în diverse formate și de șiruri de caractere. Pentru mai multe detalii urmăriți descrierea din fișierul unde este definit macro-ul.
+
+> **TIP**: Pentru usurința în timpul dezvoltării, obișnuiți-vă să faceți referire la documentația instrucțiunilor - [de transfer de date](https://en.wikibooks.org/wiki/X86_Assembly/Data_Transfer), [aritmetice](https://en.wikibooks.org/wiki/X86_Assembly/Arithmetic), [de control](https://en.wikibooks.org/wiki/X86_Assembly/Control_Flow).
+
+
+### 0. Walkthrough
+
+Accesați directorul `0-walkthrough` din arhiva laboratorului.
+
+1. Deschideți fișierul `ex1.asm` și citiți comentariile. Asamblați folosind utilitarul make și rulați. Folosind gdb, parcurgeți programul linie cu linie (comanda `start` urmată de `next`) și observați schimbarea valorilor registrelor în urma executării instrucțiunilor `MOV` și `ADD`. Ignorați secvența de instrucțiuni a macro-ului `PRINTF32`.
+
+2. Deschideți fișierul `ex2.asm` și citiți comentariile. Asamblați folosind utilitarul make și rulați. Folosind gdb, observați schimbarea registrului **EIP** la executarea instrucțiunii `JMP`. Pentru a trece peste instrucțiunile macro-ului `PRINTF32`, adăugați un breakpoint la label-ul `jump_incoming` (comanda `break` urmată de `run`).
+
+3. Deschideți fișierul `ex3.asm` și citiți comentariile. Asamblați folosind utilitarul make și rulați. Folosind gdb, parcurgeți programul folosind breakpoint-uri. Urmăriți flow-ul programului. De ce se afișează mai întâi 15 și după aceea 3? Din cauza jump-ului de la linia 9. Către ce locație indică jump-ul de la linia 25? Către label-ul `zone1`.
+
+4. Deschideți fișierul `ex4.asm` și citiți comentariile. Asamblați folosind utilitarul make și rulați. Folosind gdb, parcurgeți programul. De ce nu se ia jump-ul de la linia 12? Pentru că instrucțiunea `JE` face saltul dacă este setat bit-ul **ZF** din registrul **FLAGS**. Acesta este setat de instrucțiunea `CMP`, care face diferența dintre valorile registrelor **EAX** și **EBX** fără a stoca rezultatul. Însă `ADD`-ul de la linia 11 șterge acest flag, deoarece rezultatul operației este diferit de 0.
+
+### 1. Conditional jumps
+
+Accesați directorul `1-2-hello-world` din arhiva laboratorului. Modificați programul astfel încât afișarea mesajului să se facă numai dacă conținutul registrului **eax** este mai mare decât cel din **ebx**. Modificați și valoarea registrelor pentru a face în continuare afișarea mesajului `"Hello, World!"`. 
+
+### 2. More hellos
+
+1. Modificați programul astfel încât să mai afișeze încă un mesaj ('Goodbye, World!')
+
+2. Folosind instrucțiuni de tip jump, modificați programul astfel încât să afișeze de N ori 'Hello, World!', unde N este dat prin intermediul registrului ECX. Evitați ciclarea la infinit.
+
+
+> **TIP**: După rezolvarea cu succes, programul ar trebui să se afișeze:
+>
 > ```
-> sudo apt install gcc-multilib libc6-dev-i386
+> Hello, World!
+> Hello, World!
+> Hello, World!
+> Hello, World!
+> Hello, World!
+> Hello, World!
+> Goodbye, World!
 > ```
 
-**Pentru exersarea informațiilor legate de linking, parcurgem mai multe exerciții.**
-**În cea mai mare parte, acestea sunt dedicate observării procesului de linking, cele marcate cu sufixul `-tut` sau `-obs`.**
-**Unele exerciții necesită modificări pentru a repara probleme legate de linking, cele marcate cu sufixul `-fix`, altele au drept scop exersarea unor noțiuni (cele marcate cu sufixul `-diy`) sau dezvoltarea / completarea unor fișiere (cele marcate cu sufixul `-dev`).**
-**Fiecare exercițiu se găsește într-un director indexat; cele mai multe fișiere cod sursă și fișiere `Makefile` sunt deja prezente.**
+### 3. Grumpy jumps
 
-### 00. Folosirea variabilelor
+Accesați directorul `3-grumpy-jumps`. Treceți prin codul sursă din grumpy-jumps.asm. 
 
-Accesăm directorul `00-vars-obs/`.
-Vrem să urmărim folosirea variabilelor globale, exportate și neexportate.
+1. Modificați valorile registrelor EAX si EBX astfel încât la rularea lui să se afișeze mesajul `Well done!`. Urmăriți comentariile marcate cu `TODO`.
 
-În fișierul `hidden.c` avem variabila statică (neexportată) `hidden_value`.
-Variabila este modificată și citită cu ajutorul unor funcții neexportate: `init()`, `get()`, `set()`.
+2. De ce, în continuare, se afișează și mesajul greșit? Modificați sursa astfel încât să nu se mai afișeze mesajul greșit.
 
-În fișierul `plain.c` avem variabila exportată `age`.
-Aceasta poate fi modificată și citită direct.
+> **TIP**: Pentru a determina valorile necesare pentru registrele EAX si EBX vă recomandăm să folosiți GDB.
 
-Aceste variabile sunt folosite direct (`age`) sau indirect (`hidden_value`) în fișierul `main.c`.
-Pentru folosirea lor, se declară funcțiile și variabilele în fișierul `ops.h`.
-Declararea unei funcții se face prin precizarea antetului; declararea unei variabile se face prin prefixarea cu `extern`.
+### 4. Sets
 
-**Compilați și rulați programul obținut pe baza fișierelor de mai sus.**
+Pornind de la scheletul de cod din directorul `4-sets` va trebui să implementați operații pe mulțimi ce pot conține elemente între 0 și 31. Un mod eficient de a face asta (atât din punct de vedere al spațiului cât și al vitezei) ar fi să reprezentăm mulțimile astfel încât un registru să reprezinte o mulțime. Fiecare bit din registru va reprezenta un element din mulțime (dacă bit-ul i este setat atunci mulțimea conține elementul i).
 
-### 01. Linkarea unui singur fișier
+> **TIP**: Exemplu: dacă eax ar conține reprezentarea mulțimii `{0,2,4}`, valoarea registrului ar fi `2^0 + 2^2 + 2^4 = 1 + 4 + 16 = 21`. Documentați-vă despre instrucțiunile disponibile pe arhitectura [x86](http://www.cs.virginia.edu/~evans/cs216/guides/x86.html). 
 
-Accesăm directorul `01-one-tut/`.
-Vrem să urmărim comenzile de linkare pentru un singur fișier cod sursă C.
-Fișierul sursă este `hello.c`.
+- Aveți definite 2 mulțimi. Ce valori conțin? Realizați reuniunea celor 2 mulțimi.
 
-În cele trei subdirectoare, se găsesc fișierele de suport pentru următoarele scenarii:
-* `a-dynamic/`: crearea unui fișier executabil dinamic
-* `b-static/`: crearea unui fișier executabil static
-* `c-standalone/`: creare unui fișier executabil standalone, fără biblioteca standard C
+- Folosiți instrucțiunea or pentru a adăuga două elemente noi în mulțime. 
 
-**În fiecare subdirector folosim comanda `make` pentru a compila fișierul executabil `hello`.**
-**Folosim comanda `file hello` pentru a urmări daca fișierul este compilat dinamic sau static.**
+> **TIP**: Folosiți-vă de faptul că mulțimile curente, deși au “spațiu” pentru 32 de biți, au doar 8 biți folosiți. Dacă veți face `or` cu un număr mai mare de 255 (`0xff, 2^8-1`) care are doi biți activi, veți adăuga practic două elemente noi la mulțime.
 
-În fișierele `Makefile`, comanda de linkare folosește `gcc`.
-Este comentată o comandă echivalentă care folosește direct `ld`.
-**Pentru a urmări folosirea directă a `ld`, putem comenta comanda `gcc` și decomenta comanda `ld`. Folosim iarăși comanda `file hello`.**
+- Faceți intersecția celor 2 mulțimi.
 
-În cazul `c-standalone/`, pentru că nu folosim biblioteca standard C sau bibliotecă runtime C, trebuie să înlocuim funcționalitățile acestora.
-Funcționalitățile sunt înlocuite în fișierul `start.asm` și `puts.asm`.
-Aceste fișiere implementează, respectiv, funcția / simbolul `_start` și funcția `puts`.
-Funcția / simbolul `_start` este, în mod implicit, entry pointul unui program executabil.
-Funcția `_start` este responsabilă pentru apelul funcției `main` și încheierea programului.
-Pentru că nu există bibliotecă standard, aceste două fișiere sunt scrise în limbaj de asamblare și folosesc apeluri de sistem.
+- Determinați elementele care lipsesc din mulțimea eax pentru ca aceasta să fie completă. 
 
-**Adăugați, în fișierul `Makefile` din directorul `c-standalone/`, o comandă care folosește explicit `ld` pentru linkare.**
+> **TIP**: Adică trebuie să faceți complementul numărului folosind instrucțiunea `not`.
 
-**Extra**: Accesați directorul `01-one-diy/`.
-Vrem să compilăm și linkăm fișierele cod sursă din fiecare subdirector, asemănător cu ceea ce am făcut anterior. Copiați fișierele `Makefile` și actualizați-le în fiecare subdirector pentru a obține fișierul executabil.
+- Eliminați un element din prima mulțime.
 
-### 02. Linkarea mai multor fișiere
+- Faceți diferența între mulțimi.
 
-Accesăm directorul `02-multiple-tut/`.
-Vrem să urmărim comenzile de linkare din fișiere multiple cod sursă C: `main.c`, `add.c`, `sub.c`.
-
-La fel ca în exercițiile de mai sus, sunt trei subdirectoare pentru trei scenarii diferite:
-* `a-no-header/`: declararea funcțiilor externe se face direct în fișierul sursă C (`main.c`)
-* `b-header/`: declararea funcțiilor externe se face într-un fișier header separat (`ops.h`)
-* `c-lib/`: declararea funcțiilor externe se face într-un fișier header separat, iar linkarea se face folosind o bibliotecă statică
-
-În fiecare subdirector folosim comanda `make` pentru a compila fișierul executabil `main`.
-
-**Extra**: Accesați directorul `02-multiple-diy/`.
-Vrem să compilăm și linkăm fișierele cod sursă din fiecare subdirector, asemănător cu ceea ce am făcut anterior. Copiați fișierele `Makefile` și actualizați-le în fiecare subdirector pentru a obține fișierul executabil.
-
-### 03. Repararea entry pointului
-
-Accesați directorul `03-entry-fix/`.
-Vrem să urmărim probleme de definire a funcției `main()`.
-
-Accesați subdirectorul `a-c/`.
-Rulați comanda `make`, interpretați eroarea întâlnită și rezolvați-o prin editarea fișierului `hello.c`.
-
-Accesați subdirectorul `b-asm/`.
-Rulați comanda `make`, interpretați eroarea întâlnită și rezolvați-o prin editarea fișierului `hello.asm`.
-
-În subdirectoarele `c-extra-nolibc/` și `d-extra-libc/` veți găsi soluții care nu modifică codul sursă al `hello.c`.
-Aceste soluții modifică, în schimb, sistemul de build pentru a folosi altă funcție, diferită de `main()`, ca prima funcție a programului.
-
-**Extra**: Accesați directorul `03-entry-2-fix/`.
-Rulați comanda `make`, interpretați eroarea întâlnită și rezolvați-o prin editarea fișierului `hello.c`.
-
-### 04. Folosire simboluri (variabile și funcții)
-
-Accesați directorul `04-var-func-fix/`.
-Rulați comanda `make` și rulați executabilul obținut. Interpretați erorile/eroarea întâlnite/întâlnită și rezolvați-le/rezolvați-o prin editarea fișierelor sursă.
-
-### 05. Reparare problemă cu bibliotecă
-
-Accesați directorul `05-lib-fix/`.
-Rulați comanda `make`, interpretați eroarea întâlnită și rezolvați-o prin editarea fișierului `Makefile`.
-Urmăriți fișierul `Makefile` din directorul `02-multiple-tut/c-lib/`.
-
-### 06. Linkare fișier obiect (fără fișier cod sursă)
-
-Accesați directorul `06-obj-link-dev/`.
-Fișierul `shop.o` expune o interfață (funcții și variabile) care permite afișarea unor mesaje.
-Editați fișierul `main.c` pentru a apela corespunzător interfața expusă și pentru a afișa mesajele:
-```
-price is 21
-quantity is 42
-```
-
-Explorați interfața și conținutul funcțiilor din fisierul `shop.o` folosind `nm` și `objdump`.
-
-### Bonus. Utilizare cod python în C
-
-> **INFO:**
-> În cadrul acestui exercițiu veți vedea un exemplu de ceea ce se poate face în urma legării unui anumit tip de fișiere obiect, și anume biblioteci; pentru acest exercițiu este vorba de biblioteca python$(PYTHON_VERSION), unde **PYTHON_VERSION** poate să fie diferit în funcție de soluția propusă de fiecare.
-> Pentru a putea să compilați surse veți avea nevoie de versiunea de dezvoltare pentru python; pentru instalare folosiți comanda de mai jos:
+> **NOTE**: Pentru a vă ajuta în afișare puteți folosi macro-ul `PRINTF32`. De exemplu:
+>
+> ```assembly
+> PRINTF32 `Reuniunea este: \x0`
+> PRINTF32 `%u\n\x0`, eax
 > ```
-> sudo apt-get install python$(PYTHON_VERSION)-dev
-> ```
-> Înlocuiți $(PYTHON_VERSION) cu versiunea pe care o doriți(**3.8 sau mai recentă**)
+>
 
-Accesați directorul `bonus-c-python`.
-Fișierul main.c are un exemplu de cum se execută o funcție simplă de afișare a unui mesaj scrisă într-un modul python separat. Plecând de la exemplul prezentat, creați o funcție în modulul numit `my_module.py` aflat în directorul `python-modules`, care primește doi parametri reprezentând două șiruri de caractere și întoarce **poziția primei apariții a celui de-al doilea șir în cadrul primului**, dacă al doilea șir este un subșir al primului șir și **-1** în caz contrar.
-<pre>
-Dacă funcția creată este denumită <b>subsir</b> atunci <b>subsir('123456789', '89')</b> va întoarce 7 iar <b>subsir('123', '4')</b> va întoarce -1. Practic semnătura este de forma <b>subsir(haystack, needle)</b>.
-</pre>
+### 5. BONUS: Min
 
-Rezultatul funcției scrisă în python va fi preluat în codul C și se va afișa un mesaj corespunzător. Urmăriți comentariile cu **TODO** din fișierele `main.c` și `my_module.py`.
+Calculați minimul dintre numerele din 2 registre (eax și ebx) folosind o instrucțiune de salt și instrucțiunea `xchg`. 
 
-> **NOTE:**
-> Puteți să urmăriți și exemplele de [aici](https://www.codeproject.com/Articles/820116/Embedding-Python-program-in-a-C-Cplusplus-code) și/sau [aici](https://www.xmodulo.com/embed-python-code-in-c.html) pentru a vedea cum să preluați rezultatul funcției scrisă în python. De asemenea puteți consulta documentația de [aici](https://docs.python.org/3/c-api/long.html) pentru a vedea cum să faceți conversia rezultatului la un tip de date din C.
+### 6. BONUS: Fibonacci
 
-> **NOTE:**
-> Atenție la versiunea de python pe care o folosiți; nu este recomandată o anumită versiune însă trebuie să aveți în vedere că în funcție de soluția voastră este posibil să fie nevoie să folosiți versiune specifică. Makefile-ul folosește versiunea **3.9**.
+Calculați al N-lea număr Fibonacci, unde N este dat prin intermediul registrului `eax`.
+
+## Resurse utile
+
+* [Programming from the Ground Up](http://savannah.nongnu.org/projects/pgubook/)
+* [Reverse Engineering for Beginners](https://beginners.re/)
+* [Intel 64 and IA-32 Architectures Software Developer Manual](https://www.intel.com/content/dam/www/public/us/en/documents/manuals/64-ia-32-architectures-software-developer-instruction-set-reference-manual-325383.pdf)
+* [Intel 80386 Programmer's Reference Manual](http://css.csail.mit.edu/6.858/2015/readings/i386.pdf)
+* [RISC vs. CISC](http://css.csail.mit.edu/6.858/2015/readings/i386.pdf)
+* [Intel x86 JUMP Quick Reference](http://unixwiz.net/techtips/x86-jumps.html)
+
+## Soluții
+
+Soluțiile pentru exerciții sunt disponibile [aici](https://elf.cs.pub.ro/asm/res/laboratoare/lab-04-sol.zip). 
