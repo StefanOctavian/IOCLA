@@ -1,2 +1,2 @@
-PROGNAME := odd_even
+PROGNAME := crackme
 include ../../utils/Makefile.generic
