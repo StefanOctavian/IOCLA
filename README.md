@@ -1,317 +1,292 @@
-# Laborator 01: Reprezentarea numerelor, operații pe biți și lucru cu memoria
+# Laborator 06: Rolul registrelor, adresare directă și bazată
 
-Pentru reprezentarea informațiilor (instrucțiuni și date), calculatoarele folosesc sistemul binar (baza 2). În cazul scrierii programelor în limbaj de asamblare este preferat sistemul hexazecimal (baza 16), pentru că scutește programatorul de scrierea șirurilor lungi de 1 și 0, iar conversia din/în binar se poate face mult mai ușor decât în cazul sistemului zecimal (baza 10).
+În acest laborator vom aprofunda lucrul cu registre și modul în care se utilizează memoria atunci când programăm assembly pe un sistem x86 de 32 biți.
 
-## Sistemele binar și hexazecimal
+## Registre
 
-Înainte de a începe lucrul cu limbajul de asamblare, este necesar să ne familiarizăm cu sistemele binar și hexazecimal și cu modalitățile de conversie între ele.
+Registrele sunt principalele “unelte” cu care se scriu programele în limbaj de asamblare. Acestea sunt precum variabile construite în procesor. Utilizarea registrelor în locul adresării directe a memoriei face ca dezvoltarea și citirea programelor scrise în assembly să fie mai rapidă și mai ușoara. Singurul dezavantaj al programării în limbaj de asamblare x86 este acela că sunt puține registre.
 
->**NOTE**: Pentru reprezentarea numerelor în binar vom folosi prefixul 0b, iar pentru cele în hexazecimal vom folosi 0x.
+Procesoarele x86 moderne dispun de 8 registre cu scop general a căror dimensiune este de 32 de biți. Numele registrelor sunt de natură istorică (spre exemplu: EAX era numit registru acumulator din cauza faptului că este folosit de o serie de instrucțiuni aritmetice, cum ar fi [idiv](https://www.felixcloutier.com/x86/idiv)). In timp ce majoritatea registrelor și-au pierdut scopul special, devenind “general purpose” în ISA-ul modern(EAX, EBX, ECX, EDX, ESI, EDI), prin convenție, 2 și-au pastrat scopul inițial: ESP (stack pointer) și EBP (base pointer).
 
-### Sistemul binar
+### Subsecțiuni ale registrelor
 
-În **sistemul binar** (baza 2), valorile sunt reprezentate ca un șir de 0 și 1. Fiecare cifră din șir reprezintă un bit, iar un grup de 8 biți formează un octet (byte). Un grup de 4 biți poartă denumirea de **nibble**, sau **half-byte**.
+În anumite cazuri dorim să modificăm valori ce sunt reprezentate pe mai puțin de 4 octeți (spre exemplu, lucrul cu șiruri de caractere). Pentru aceste situații, procesoarele x86 ne oferă posibilitatea de a lucra cu subsectiuni de 1, respectiv 2 octeți ale registrelor EAX, EBX, ECX, EDX.
 
-#### Operații cu valori reprezentate în binar
+În imaginea de mai jos sunt reprezentate registrele, subregistrele și dimensiunile lor.
 
-##### Operații aritmetice
+![Registre x86_32](images/registers.png)
 
-[Ghid pentru operații aritmetice.](https://www.tutorialspoint.com/computer_logical_organization/binary_arithmetic.htm)
+> **WARNING**: Subregistrele fac parte din registre, ceea ce înseamnă că dacă modificăm un registru, în mod implicit modificăm și valoarea subregistrului.
 
-#### Operații logice
+> **NOTE**: Subregistrele se folosesc în mod identic cu registrele, doar că dimensiunea valorii reținute este diferită.
 
-##### Operatori pe valori binare
+> **NOTE**: Pe lângă registrele de bază mai există și șase registre segment corespunzătoare unor anumite zone după cum se observă în imagine:
+>
+> ![Registre Segment](images/segments.png)
 
-1. **Inversare (NOT)**: se inversează fiecare bit. Exemplu: INV(0b10011010) = 0b01100101
-2. **Și logic (AND)**: se efectuează operația 'și' între biții de pe aceleași poziții din operanzi. Exemplu: 0b1001 AND 0b0111 = 0b0001
-3. **Sau logic (OR)**: se efectuează operația 'sau' între biții de pe aceleași poziții din operanzi. Exemplu: 0b1001 OR 0b0111 = 0b1111
-4. **Sau exclusiv (XOR)**: dacă biții de pe aceleași poziții din operanzi au valori egale, bitul rezultat are valoarea 0, altfel are valoarea 1. Exemplu: 0b1001 XOR 0b0111 = 0b1110
+### Declarări statice de regiuni de memorie
 
-##### Deplasări (Shifts)
+Declarările statice de memorie (analoage declarării variabilelor globale), în lumea x86, se fac prin intermediul unor directive de asamblare speciale. Aceste declarări se fac în secțiunea de date (regiunea .DATA). Porțiunilor de memorie declarate le pot fi atașate un nume prin intermediul unui label pentru a putea fi referite ușor mai târziu în program. Urmăriți exemplul de mai jos:
 
-###### Deplasări logice
-
-Deplasările logice dreapta/stânga presupun mutarea cu o poziție a fiecărui bit. Cum rezultatul trebuie să fie pe același număr de biți ca valoarea inițială, primul bit este pierdut, iar spațiul gol este completat cu bitul 0.
-
-![Deplasare logică la stânga](images/left-logical-shift.png)
-
-![Deplasare logică la dreapta](images/right-logical-shift.png)
-
-Pentru explicații legate de operațiile pe biți în C urmăriți ghidul de la adresa [Operații pe biți în C](https://www.geeksforgeeks.org/bitwise-operators-in-c-cpp/).
-
-### Sistemul hexazecimal
-
-În **sistemul hexazecimal** (baza 16), valorile sunt reprezentate sub forma unui șir de caractere din intervalul '0'-'9' sau 'a'-'f'. Un octet este format din două astfel de caractere, deci fiecare caracter corespunde unui grup de 4 biți (un nibble).
-
-#### Conversia din zecimal în binar/hexazecimal
-
-- Se împarte succesiv numărul la numărul bazei (2 sau 16) și se rețin resturile
-- Când câtul împărțirii devine 0, se scriu resturile în ordine inversă.
-- În cazul bazei 16, atunci când restul este mai mare decât 9 se folosesc literele a-f (10=a, 15=f)
-
-##### Exemplu: conversia numărului 0xD9B1 în zecimal
-
-0xD9B1 = 1 * 16 ^ 0 + 11 * 16 ^ 1 + 9 * 16 ^ 2 + 13 * 16 ^ 3 = 55729
-
-#### Conversia intre binar și hexazecimal
-
-După cum am precizat anterior, o cifră din cadrul unui număr în hexazecimal corespunde unui grup de 4 biți (un nibble). Astfel, pentru a converti un număr din hexazecimal în binar este suficient să transformăm fiecare cifră în grupul de 4 biți echivalent.
-
-##### Exemplu: Conversia numărului 0xD9B1 în binar
-
-- 0x1 = 0b0001
-- 0xB = 0b1011
-- 0x9 = 0b1001
-- 0xD = 0b1101
-
-Astfel, numărul obținut în binar este **0b1101100110110001**.
-
-Operația inversă, conversia din binar în hexazecimal se poate face convertind fiecare grup de 4 biți în cifra corespunzătoare în hexazecimal.
-
-#### La ce utilizăm reprezentarea în baza 16?
-
-Sistemul hexazecimal este utilizat pentru a reprezenta adresele la care se află datele în memorie și pentru a vizualiza aceste date într-un mod mai ușor de interpretat decât o secvență compusă doar din 0 și 1. Imaginea de mai jos oferă un exemplu în acest sens:
-
-![Hartă memorie](images/Hex-View.png)
-
-(Imagine preluata de pe [Digital Detective](https://www.digital-detective.net/))
-
-### Reprezentarea tipurilor de date
-
-În memoria unui calculator o valoare este memorată pe un număr fix de biți. În funcție de arhitectură fiecare procesor poate accesa un număr maxim de biți în cadrul unei operații, acest număr de biți reprezintă dimensiunea cuvântului (**word size**).
-
-Dimensiunile tipurilor de date uzuale folosite în C sunt dependente atât de procesor, cât și de platforma cu ajutorul căreia a fost compilat programul (sistem de operare, compilator). În tabelul de mai jos sunt prezentate dimensiunile tipurilor de date pe un procesor cu dimensiunea cuvântului arhitecturii de 32 de biți, în cazul în care programul este compilat folosind gcc, sub Linux.
-
-În partea stângă avem adresele din memorie unde se află date. La adresa **0x0009FA08** primii 4 octeți începând cu offset-ul **0x02** sunt **0x01**, **0x00**, **0xFF**, **0xFF**. Aceștia pot reprezenta un întreg pe 4 octeți, 4 caractere, 2 întregi pe 2 octeți. Folosind baza 16 putem să interpretăm datele reușind astfel să intuim ce ar putea să reprezinte acestea.
-
-| Tip de date |	Număr biți |	Număr octeți |
-|-------------|------------|-----------------|
-| char        |   	8  |	1            |
-| short       |  	16 |	2            |
-| int         |   	32 |	4            |
-| long        |   	32 |	4            |
-| long long   |   	64 |	8            |
-| pointer     |  	32 |	4            |
-
-### Ordinea de reprezentare a numerelor mai mari de un octet (Little-Endian vs Big-Endian)
-
- Pentru reprezentarea valorilor mai mari de un octet există două metode posibile, ambele folosite în practică:
-
-- Little-Endian: cel mai puțin semnificativ octet este memorat primul(octeții sunt memorați în ordine inversă). Acest model este folosit de familia de procesoare Intel x86.
-- Big-Endian: cel mai semnificativ octet este memorat primul.
-
-**Exemplu**: Dorim să stocăm valoarea 0x4a912480 în memorie pe 32 de biți (4 octeți), începând cu adresa 0x100, folosind cele două metode:
-
-| Metoda        | Adresa 0x100 | Adresa 0x101 | Adresa 0x102 | Adresa 0x103 |
-|---------------|--------------|--------------|--------------|--------------|
-| Little-Endian |	0x80   |     0x24     |	   0x91      |	  0x4a      |
-| Big-Endian 	|       0x4a   |     0x91     |    0x24      | 	  0x80      |
-
-## Pointeri în C
-
-În limbajul C un pointer este o variabilă a cărei valoare este adresa unei alte variabile. Ne putem gândi la un pointer ca un intermediar, și anume o variabilă care indică către o locație finală sau către un alt intermediar după cum se poate vedea în imaginea și codul de mai jos.
-
-![Simple and double pointer](images/cpluspointer020.png)
-
-(Imagine preluata de pe [Tenouk](https://www.tenouk.com/))
-
-```cpp
-#include <stdio.h>
- 
-int main()
-{
-    int v;
-    int *p;  /* pointer la un întreg pe 32 biți */
-    int **pp;  /* pointer la un pointer care conține conține adresa unui întreg pe 32 biți */
- 
-    /* Pentru a accesa adresa unei variabile în C se folosește operatorul &(referențiere) */
-    p = &v;  /* p conține adresa valorii v */
-    pp = &p;  /* pp conține adresa adresei valorii v */
- 
-    v = 69;
-    /* Pentru a accesa valoarea de la adresa memorată de un pointer se folosește operatorul *(dereferențiere) */
-    printf("v(%d) - *p(%d) - **pp(%d)\n", v, *p, *(*pp));  /* se va afișa v(69) - *p(69) - **pp(69) */
- 
-    return 0;
-}
+```Assembly
+.DATA
+    var        DB 64    ; Declară un octet conținând valoarea 64. Etichetează
+                        ; locația de memorie cu "var".
+    var2       DB ?     ; Declară un octet neinițializat etichetat cu "var2".
+               DB 10    ; Declară un octet neetichetat, inițializat cu 10. Acest
+                        ; octet va fi plasat la adresa (var2 + 1).
+    X          DW ?     ; Declară un cuvânt(2 octeți) neinițializat, etichetat cu "X".
+    Y          DD 3000  ; Declară un cuvânt dublu (4 octeți) cu eticheta "Y",
+                        ; inițializat cu valoarea 3000.
+    Z          DD 1,2,3 ; Declară 3 cuvinte duble (a câte 4 octeți fiecare)
+                        ; incepând cu adresa "Z" și inițializate cu 1, 2, respectiv 3.
+                        ; De exemplu, 3 va fi plasat la adresa (Z + 8).
 ```
 
-### Avantaje pointeri
+> **NOTE**: DB, DW, DD sunt directive folosite pentru a specifica dimensiunea porțiunii:
+> | Directivă | Rol | Dimensiune |
+> | ----------|-----|----------- |
+> | DB | Define Byte | 1 octet (8 biți) |
+> | DW | Define Word | 2 octeți (16 biți) |
+> | DD | Define Double Word | 4 octeți (32 biți) |
 
-- pointerii sunt folosiți la crearea de structuri de date complexe precum liste înlănțuite, arbori, grafuri, tabele de dispersie, etc.
-- pointerii se folosesc pentru a transfera informații între funcții diferite sau apeluri recursive fără a folosi variabile globale
-- folosind pointeri putem să (re)alocăm memorie dinamic
-- putem să avem ca parametri pentru funcții alte funcții, șiruri de caractere, structuri de date complexe
+> **NOTE**: Sunt mai multe tipuri de regiuni de memorie după cum se poate observa și în imaginea de mai jos:
+>
+> ![Sectiuni de memorie](images/sections.jpg)
 
-### Dezavantaje pointeri
+Ultima declarare din exemplul de mai sus reprezintă declararea unui vector. Spre deosebire de limbajele de nivel mai înalt, unde vectorii pot avea multiple dimensiuni, iar elementele lor sunt accesate prin indici, în limbajul de asamblare vectorii sunt reprezentați ca un număr de celule ce se află intr-o zonă contiguă de memorie.
 
-- un pointer care nu este inițializat, dar este folosit într-un program duce la **segmentation fault** prin accesarea unei zone de memorie restricționate
-- eliberarea memoriei alocate dinamic se face manual de către programator
-- pentru a accesa o valoare este nevoie de dereferențiere, operație care este mai lentă decât accesarea directă a valorii
+## Adresarea Memoriei
 
-În C se poate defini un pointer către oricare dintre tipurile de date care există în limbaj cât și pentru **void**. Un void pointer diferă de un pointer către un tip de date explicit prin faptul că un void pointer **NU** poate fi folosit în operații cu pointeri, void neavând o dimensiune clară. Un exemplu de bază unde se folosesc pointerii și operațiile cu pointeri este alocarea și parcurgerea unui tablou de valori:
+Procesoarele x86 moderne pot adresa pana la 2^32 bytes de memorie, ceea ce înseamnă că adresele de memorie sunt reprezentate pe 32 de biți. Pentru a adresa memoria, procesorul folosește adrese (implicit, fiecare label este translatat într-o adresa de memorie corespunzătoare). Pe lângă label-uri mai există și alte forme de a adresa memoria:
 
-```cpp
-#include <stdio.h>
-#include <stdlib.h>
- 
-#define ARR_LENGTH 5
- 
-int main()
-{
-   int *arr, i;
- 
-   arr = (int *)malloc(sizeof(int) * ARR_LENGTH);
-   // arr = (int *)calloc(ARR_LENGTH, sizeof(int));
- 
-   for (i = 0; i < ARR_LENGTH; ++i) {
-       /*
-        * arr + i iterează prin adresele fiecărui element din tablou însă adresa arr + i nu crește cu i ci cu i * sizeof(int), arr fiind un pointer la int
-        * în C nu se vede și nu este necesară această operație dar mai târziu în limbajul de asamblare va fi necesar 
-        */
-       printf("arr[%d] = %d: ", i, *(arr + i));
-   }
- 
-   free(arr);
-   return 0;
-}
+```Assembly
+mov eax, [0xcafebab3]         ; directă (deplasament)
+mov eax, [esi]                ; indirectă (bază)
+mov eax, [ebp-8]              ; bazată (bază + deplasament)
+mov eax, [ebx*4 + 0xdeadbeef] ; indexată (index * scală + deplasament)
+mov eax, [edx + ebx + 12]     ; bazată și indexată fără scală (bază + index + deplasament)
+mov eax, [edx + ebx*4 + 42]   ; bazată și indexată cu scală (bază + index * scală + deplasament)
 ```
 
-Pointerii oferă o flexibilitate mare în ce privește accesul la memorie. Mai jos este un exemplu în acest sens care verifică dacă un sistem este little sau big endian, folosind cast între diverse tipuri de pointeri.
+> **WARNING**: Următoarele adresări sunt invalide:
+>
+> ```Assembly
+> mov eax, [ebx-ecx]     ; Registrele pot fi doar adunate
+> mov [eax+esi+edi], ebx ; Calculul adresei poate conține cel mult 2 registre
+> ```
 
-```cpp
-#include <stdio.h>
- 
-int main()
-{
-    int v = 0x00000001;
-    unsigned char *first_byte = (unsigned char *)&v;
- 
-    if (*first_byte == 0x01)
-        printf("little-endian\n");
-    else
-        printf("big-endian\n");
- 
-    return 0;
-}
+### Directive de dimensiune
+
+În general, dimensiunea pe care este reprezentată o valoare ce este adusă din memorie poate fi inferată (dedusă) din codul instrucțiunii folosite. Spre exemplu, în cazul adresărilor de mai sus, dimensiunea valorilor putea fi inferată din dimensiunea registrului destinație, însă în anumite cazuri acest lucru nu este atât de evident. Să urmarim urmatoarea instrucțiune:
+
+```Assembly
+mov [ebx], 2
 ```
 
-## Exerciții
+Dupa cum se observă, se dorește stocarea valorii 2 la adresa conținută de registrul ebx. Dimensiunea registrului este de 4 bytes. Valoarea 2 poate fi reprezentată atât pe 1 cât și pe 4 bytes. În acest caz, din moment ce ambele interpretări sunt valide, procesorul are nevoie de informații suplimentare despre cum să trateze această valoare. Acest lucru se poate face prin directivele de dimensiune:
 
->**NOTE**: În cadrul laboratoarelor vom folosi repository-ul de git al materiei IOCLA - (https://github.com/systems-cs-pub-ro/iocla). Repository-ul este clonat pe desktop-ul mașinii virtuale. Pentru a-l actualiza, folosiți comanda `git pull origin master` din interiorul directorului în care se află repository-ul (~/Desktop/iocla).Recomandarea este să îl actualizați cât mai frecvent, înainte să începeți lucrul, pentru a vă asigura că aveți versiunea cea mai recentă. Dacă doriți să descărcați repository-ul în altă locație, folosiți comanda `git clone https://github.com/systems-cs-pub-ro/iocla ${target}`. Pentru mai multe informații despre folosirea utilitarului `git`, urmați ghidul de la [Git Immersion](https://gitimmersion.com).
+```Assembly
+mov byte [ebx], 2  ; Mută valoarea 2 în octetul de la adresa conținută în EBX.
+mov word [ebx], 2  ; Mută întregul 2 reprezentat pe 16 biți în cei 2 octeți
+                   ; începând de la adresa conținută în EBX
+mov dword [ebx], 2 ; Mută întregul 2 reprezentat pe 32 de biți în cei 4 octeți
+                   ; începând de la adresa conținută în EBX
+```
 
-### 1. Conversii
+### Instrucțiunea loop
 
-Efectuați următoarele conversii între sisteme de numerație:
+Instrucțiunea loop se folosește pentru bucle cu un număr de iterații prestabilit, încărcat în registrul ECX. Sintaxa ei este urmatoarea:
 
-a. Din decimal în binar și hexazecimal:
+```Assembly
+mov ecx, 10 ; Inițializează ECX cu numărul de iterații
+label:
+; conținutul buclei
+loop label
+```
 
-- 121
-- 18446
+La fiecare iterație, se decrementează registrul ECX și se verifică dacă este diferit de 0. În acest caz, se sare la eticheta precizată. Există și alte forme ale instrucțiunii care verifică, în plus, flagul ZF:
 
-b. Convertiți în zecimal:
+| Mnemonică | Descriere |
+| ----------|---------- |
+| LOOPE/LOOPZ label | Decrementează ECX; sari la eticheta label dacă ECX != 0 și ZF == 1 |
+| LOOPNE/LOOPNZ label | Decrementează ECX; sari la eticheta label dacă ECX != 0 și ZF != 1 |
 
-- 0b1100010111010010
-- 0xBB29
+> **NOTE**: Ceea ce trebuie să aveți în vedere atunci când utilizați salturi într-un program scris în limbaj de asamblare este diferența dintre short jump(near jump) și long jump(far jump).
+> | Tip și exemplu | Dimensiune și semnificație | Descriere |
+> | ---------------|----------------------------|---------- |
+> | Short Jump (loop) | 2 octeți (un octet pentru opcode(Operation Code) și un octet pentru adresă) | adresa relativă a instrucțiunii către care se dorește să se facă jump-ul trebuie să nu fie la distanță mai mare de 128 octeți față de adresa instrucțiunii curente |
+> | Long Jump (jmp) | 3 octeți (un octet pentru opcode(Operation Code) și doi octeți pentru adresă) | adresa relativă a instrucțiunii către care se dorește să se facă jump-ul trebuie să nu fie la distanță mai mare de 32768 octeți față de adresa instrucțiunii curente |
 
-c. Din hexazecimal în binar:
+## Tutoriale și exerciții
 
-- 0x5E
-- 0x4A01
+> **NOTE**: În cadrul laboratoarelor vom folosi repository-ul de git al materiei IOCLA - <https://github.com/systems-cs-pub-ro/iocla>. Repository-ul este clonat pe desktop-ul mașinii virtuale. Pentru a îl actualiza, folosiți comanda git pull origin master din interiorul directorului în care se află repository-ul (~/Desktop/iocla). Recomandarea este să îl actualizați cât mai frecvent, înainte să începeți lucrul, pentru a vă asigura că aveți versiunea cea mai recentă.Dacă doriți să descărcați repository-ul în altă locație, folosiți comanda git clone <https://github.com/systems-cs-pub-ro/iocla> ${target}.Pentru mai multe informații despre folosirea utilitarului git, urmați ghidul de la [Git Immersion](https://gitimmersion.com/).
 
-d. Din binar în hexazecimal:
+### 0. Recapitulare: Descompunerea unui număr în puteri ale lui 2
 
-- 0b01111101
-- 0b1000110000011111
+Pornind de la fișierul sursă `power-2.asm`, realizați un program care descompune un număr în puteri ale lui 2. Numărul va fi pasat prin registrul `eax`.
 
->**TIP**: În rezolvarea exercițiilor următoare NU aveți voie să modificați semnătura funcțiilor pe care trebuie să le implementați. Veți porni de la un fișier inițial și puteți adăuga oricâte funcții și fișiere auxiliare considerați, dar aveți în vedere că dacă adăugați fișiere noi va trebui să modificați Makefile-ul, să creați un nou Makefile sau să compilați manual. Recomandarea este să utilizați fișierul pus deja la dispoziția voastră fără a adăuga altele noi.
->Pentru compilare și execuție puteți folosi:
->    make build
->    make run
->    make clean(opțional, pentru a șterge fișierele obiect și executabilul)
+De exemplu, pentru `eax = 211`, programul vostru va afișa:
 
-### 2. Lungime și egalitate cu operații pe biți
+```
+1
+2
+16
+64
+128
+```
 
-Veți rezolva exercițiul plecând de la fișierul **len_xor.c** aflat în directorul **2-len_xor**.
+> **TIP**: Încercați să vă aduceți aminte ce face instrucțiunea test.
 
-Pentru un șir de caractere dat, să se afișeze:
+### 1. Tutorial: Înmulțirea a două numere reprezentate pe un octet
 
-- lungimea șirului de caractere
-- adresa fiecărui caracter de pe poziția i care este egal cu caracterul de poziția i + 2^i (dacă i + 2^i depășește dimensiunea șirului de caractere se va folosi operația modulo)
+Parcurgeți, rulați și testați codul din fișierul `multiply.asm`. În cadrul programului înmulțim două numere definite ca octeți. Pentru a le putea accesa folosim o construcție de tipul `byte [register]`.
 
-Folosiți cât de mult posibil operații cu pointeri și operații pe biți!
+Atunci cănd facem înmulțire procesul este următorul, așa cum este descris și [aici](https://en.wikibooks.org/wiki/X86_Assembly/Arithmetic):
 
->**NOTE**: Nu folosiți în rezolvare funcții precum strlen, sizeof, pow, si nu verificați egalitatea folosind ==. De asemenea, nu accesați elementele șirului sub forma s[i].
+1. Plasăm deînmulțitul în registrul de deînmulțit, adică:
+    * dacă facem operații pe un byte (8 biți, un octet), plasăm deînmulțitul în registrul `AL`;
+    * dacă facem operații pe un cuvânt (16 biți, 2 octeți, plasăm deînmulțitul în registrul `AX`;
+    * dacă facem operații pe un dublu cuvânt (32 de biți, 4 octeți), plasăm deînmulțitul în registrul `EAX`.
+1. Înmulțitorul este transmis ca argument mnemonicii `mul`. Înmulțitorul trebuie să aibă aceeași dimensiune ca deînmulțitul.
+1. Rezultatul este plasat în două registre (partea high și partea low).
 
->**TIP**: Pentru șirul de caractere “aac”:
+Testați programul. Încercați alte valori pentru num1 și num2.
+
+### 2. Înmulțirea a două numere
+
+Actualizați zona marcată cu `TODO` în fișierul `multiply.asm` pentru a permite înmulțirea și a numelor de tip `word` și `dword`, adică `num1_dw` cu `num2_dw`, respectiv `num1_dd` și `num2_dd`.
+
+> **TIP**: Pentru înmulțirea numerelor de tip word (pe 16 biți), componentele sunt dispuse astfel:
 >
->    length = 3
->    Address of a: 0x564c364482a0
->    Address of a: 0x564c364482a1
+> * În registrul `AX` se plasează deînmulțitul.
+> * Argumentul instrucțiunii, înmulțitorul, `mul` (posibil un alt registru) este pe 16 biți (fie valoare fie un registru precum `BX`, `CX`, `DX`).
+> * Rezultatul înmulțirii este dispus în perechea `DX:AX`, adică partea “high” a `rezultatului în registrul DX, iar partea “low” a rezultatului în registrul AX`.
 >
->Pentru șirul de caractere “ababababacccbacbacbacbacbabc”:
+> Pentru înmulțirea numerelor de tip `dword` (pe 32 biți), componentele sunt dispuse astfel:
 >
->    length = 28
->    Address of b: 0x563f0da6f2a1
->    Address of a: 0x563f0da6f2a2
->    Address of c: 0x563f0da6f2a9
->   Address of a: 0x563f0da6f2b0
->    Address of b: 0x563f0da6f2b2
->    Address of b: 0x563f0da6f2b5
->    Address of c: 0x563f0da6f2b7
->    Address of a: 0x563f0da6f2b9
+> * În registrul `EAX` se plasează deînmulțitul.
+> * Argumentul instrucțiunii, înmulțitorul, mul (posibil un alt registru) este pe 32 biți (fie valoare fie un registru precum `EBX`, `ECX`, `EDX`).
+> * Rezultatul înmulțirii este dispus în perechea `EDX:EAX`, adică partea “high” a rezultatului în registrul `EDX`, iar partea “low” a rezultatului în registrul `EAX`.
+
+> **NOTE**: La afișarea rezultatului folosiți macro-ul `PRINTF32` pentru a afișa cele două registre care conțin rezultatul:
 >
->**Adresele de mai sus sunt orientative!**
+> * Registrele `DX` și `AX` pentru înmulțirea numerelor de tip word.
+> * Registrele `EDX` și `EAX` pentru înmulțirea numerelor de tip dword.
 
-### 3. Oglindirea unui șir de caractere
+### 3. Tutorial: Suma primelor N numere naturale
 
-Veți rezolva exercițiul plecând de la fișierul **mirror.c** aflat în directorul **3-mirror**.
+În programul `sum_n.asm` este calculată suma primelor num numere naturale.
 
-Folosind operații cu pointeri implementați un program în C care inversează un șir de caractere. Funcția `mirror` trebuie să realizeze rotirea datelor din șirul de caractere **in-place** (la ieșirea din funcție, șirul dat ca intrare va conține șirul inversat).
+Urmăriți codul, observați construcțiile și registrele specifice pentru lucru cu bytes. Rulați codul.
 
->**NOTE**: Nu accesați elementele șirului sub forma s[i]. 
+> **IMPORTANT**: Treceți la următorul pas doar după ce ați înțeles foarte bine ce face codul. Vă va fi greu să faceți următorul exercițiu dacă aveți dificultăți în înțelegerea exercițiului curent.
 
->**TIP**: 
->    mirror(“AnaAreMere”) = “ereMerAanA”
+### 4. Suma pătratelor primelor N numere naturale
+
+Porniți de la programul `sum_n.asm` și creați un program `sum_n_square.asm` care să calculeze suma pătratelor primelor num numere naturale (num < = 100).
+
+> **TIP**: Registrele `eax` și `edx` le veți folosi la înmulțirea pentru ridicarea la putere (în instrucțiunea `mul`). Astfel că nu veți mai putea folosi (ușor) registrul `eax` pentru stocarea sumei pătratelor. Pentru a reține suma pătratelor aveți două variante:
 >
->    mirror(“asdfghjl”) = “ljhgfdsa”
+> 1. (mai simplu) Folosiți registrul `ebx` pentru a reține suma pătratelor.
+> 2. (mai complicat) Înainte de a opera registrul `eax` salvați valoarea sa pe stivă (folosind instrucțiunea `push`), apoi faceți operațiile necesare și apoi restaurați valoarea salvată (folosind instrucțiunea `pop`).
+
+> **NOTE**: Pentru verificare, suma pătratelor primelor 100 de numere naturale este `338350`.
+
+### 5. Tutorial: Suma elementelor dintr-un vector reprezentate pe un octet
+
+În programul `sum_array.asm` este calculată suma elementelor unui vector (array) de octeți (bytes, reprezentare pe 8 biți).
+
+Urmăriți codul, observați construcțiile și registrele specifice pentru lucru cu bytes. Rulați codul.
+
+> **IMPORTANT**: Treceți la următorul pas doar după ce ați înțeles foarte bine ce face codul. Vă va fi greu să faceți exercițiile următoare dacă aveți dificultăți în înțelegerea exercițiului curent.
+
+### 6. Suma elementelor dintr-un vector
+
+În zona marcată cu TODO din fișierul `sum_array.asm` completați codul pentru a realiza suma vectorilor cu elemente de tip word (16 biți) și de tip dword (32 de biți); este vorba de vectorii `word_array` și `dword_array`.
+
+> **TIP**: Când veți calcula adresa unui element din array, veți folosi construcție de forma:
 >
->    mirror(“qwerty”) = “ytrewq”
-
-### 4. Rotații
-
-Veți rezolva exercițiul plecând de la fișierul rotations.c aflat în directorul 4-rotations.
-
-Implementați în C rotație stânga și rotație dreapta pentru numere întregi pe 32 de biți. 
-
->**TIP**: Operația de rotire (numită și deplasare circulară) este similară cu cea de deplasare, singura diferență fiind aceea că spațiul gol generat de deplasare este înlocuit cu bitul eliminat.
+> ```base + size * index```
 >
-> Exemplu rotație **stânga** cu **un** bit:
+> În construcția de mai sus:
 >
->![Rotație logică la stânga](images/left-logical-rotation.png)
+> * base este adresa vectorului (adică word_array sau `dword_array`)
+> * size este lungimea elementului vectorului (adică 2 pentru vector de word (16 biți, 2 octeți) și 4 pentru vector de dword (32 de biți, 4 octeți)
+> * index este indexul curent în cadrul vectorului
 
->**NOTE**: 
->    rotate_left(0x80000000, 1) = 1
->    rotate_right(0x00000001, 16) = 65536
-
-### 5. Par binar și impar hexa
-
-Veți rezolva exercițiul plecând de la fișierul odd_even.c aflat în directorul 5-odd_even.
-
-Să se parcurgă un tablou de întregi pe 32 de biți folosind operații cu pointeri și să se afișeze în binar numerele pare și în hexazecimal numerele impare.
-
->**NOTE**: În rezolvare folosiți operații pe biți oriunde este posibil! 
-
->**NOTE**: Pentru vectorul: 214, 71, 84, 134, 86, programul va afișa:
+> **NOTE**: Suma elementelor celor trei vectori trebuie să fie:
 >
->    0b11010110
->    0x00000047
->    0b01010100
->    0b10000110
->    0b01010110
+> * `sum(byte_array): 575`
+> * `sum(word_array): 65799`
+> * `sum(dword_array): 74758117`
+
+### 7. Suma pătratelor elementelor dintr-un vector
+
+Pornind de la programul de la exercițiul anterior, calculați suma pătratelor elementelor dintr-un vector.
+
+> **NOTE**: Puteți folosi vectorul `dword_array`, având însă grijă ca suma pătratelor elementelor conținute să poată fi reprezentată pe 32 de biți.
+
+> **NOTE**: Dacă folosiți construcția de mai jos (vector cu 10 elemente)
+>
+> ```
+> dword_array dd 1392, 12544, 7992, 6992, 7202, 27187, 28789, 17897, 12988, 17992
+>```
+>
+> suma pătratelor va fi 2704560839.
+
+### 8. Împărțirea a două numere
+
+În programul `divide.asm` sunt calculate câtul și restul a două numere reprezentate pe un octet. Actualizați zona marcată cu `TODO` pentru a realiza împărțirile `dividend2 / divisor2` (împărțitor de tip word) și `dividend3 / divisor3` (împărțitor de tip dword).
+
+În mod similar instrucțiunii `mul`, regiștrii în care este plasat deîmpărțitul variază în funcție de dimensiunea de reprezentare a împărțitorului. Împărțitorul este transmis ca argument mnemonicii `div`.
+
+> **TIP**: Dacă împărțitorul este de tip `byte` (8 biți), componentele sunt dispuse astfel:
+>
+> * deîmpărțitul este plasat în registrul `AX`
+> * argumentul instrucțiunii `div` are 8 biți și poate fi reprezentat de un registru sau de o valoare imediată
+> * câtul este dispus în `AL`
+> * restul este dispus în `AH`
+>
+> Dacă împărțitorul este de tip `word` (16 biți), componentele sunt dispuse astfel:
+>
+> * deîmpărțitul este dispus în perechea `DX:AX`, adică partea sa `high` în registrul `DX`, iar partea `low` în `AX`
+> * argumentul instrucțiunii `div` are 16 biți și poate fi reprezentat de un registru sau de o valoare imediată
+> * câtul este dispus în `AX`
+> * restul este dispus în `DX`
+>
+> Dacă împărțitorul este de tip `dword` (32 de biți), componentele sunt dispuse astfel:
+>
+> * deîmpărțitul este dispus în perechea `EDX:EAX`, adică partea sa `high` în registrul `EDX`, iar partea `low` în `EAX`
+> * argumentul instrucțiunii `div` are 32 de biți și poate fi reprezentat de un registru sau de o valoare imediată
+> * câtul este dispus în `EAX`
+> * restul este dispus în `EDX`
+
+> **TIP**: Dacă programul vă dă “SIGFPE. Arithmetic exception”, cel mai probabil aţi uitat să iniţializaţi partea superioară a deîmpărţitului (AH, DX sau EDX).
+
+### 9. Bonus: Numărul de numere negative și pozitive dintr-un vector
+
+Creați un program care afișează numărul de numere negative, respectiv numărul de numere pozitive dintr-un vector.
+
+> **NOTE**: Definiți un vector care să conțină atât numere negative cât și numare pozitive.
+
+> **TIP**: Folosiți intrucțiunea `cmp` și mnemonici de salt condițional. Urmăriți detalii aici.
+
+> **TIP**: Intrucțiunea `inc` urmată de un registru incrementează cu 1 valoarea stocată în acel registru.
+
+### 10. Bonus: Numărul de numere pare și impare dintr-un vector
+
+Creați un program care afișează numărul de numere pare, respectiv numărul de numere impare dintr-un vector.
+
+> **TIP**: Puteți folosi instrucțiunea `div` pentru a împărți un număr la 2 și pentru a compara apoi restul împărțirii cu 0.
+
+> **NOTE**: Pentru testare folosiți un vector doar cu numere pozitive. Pentru numere negative trebuie să faceți extensie de semn; ar merge și fără pentru că ne interesează doar restul, dar nu am fi riguroși :-)
+
+### Links
+
+* [X86 Instruction reference](https://www.felixcloutier.com/x86/index.html)
+* [Alte cursuri de assembler](https://www.cs.virginia.edu/~evans/cs216/guides/x86.html)
 
 ## Soluții
 
-Soluțiile pentru exerciții sunt disponibile [aici](https://elf.cs.pub.ro/asm/res/laboratoare/lab-01-sol.zip).
-
-
+Soluțiile pentru exerciții sunt disponibile [aici](https://elf.cs.pub.ro/asm/res/laboratoare/lab-06-sol.zip).
