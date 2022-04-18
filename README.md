@@ -1,292 +1,256 @@
-# Laborator 06: Rolul registrelor, adresare directă și bazată
+# Laborator 07: Date Structurate. Structuri, vectori. Operatii pe siruri
+În acest laborator vom introduce noțiunea de structură din limbajul assembly și vom lucra cu operații specializate pe șiruri.
 
-În acest laborator vom aprofunda lucrul cu registre și modul în care se utilizează memoria atunci când programăm assembly pe un sistem x86 de 32 biți.
+## Structuri
+Structurile sunt folosite pentru a grupa date care au tipuri diferite, dar care pot fi folosite împreună pentru a crea un tip compus.
 
-## Registre
+În continuare vom trece prin pașii necesari pentru a folosi o structură: declararea, instanțierea și accesarea câmpurilor unei structuri.
 
-Registrele sunt principalele “unelte” cu care se scriu programele în limbaj de asamblare. Acestea sunt precum variabile construite în procesor. Utilizarea registrelor în locul adresării directe a memoriei face ca dezvoltarea și citirea programelor scrise în assembly să fie mai rapidă și mai ușoara. Singurul dezavantaj al programării în limbaj de asamblare x86 este acela că sunt puține registre.
+### Declararea unei structuri
+În NASM, o structură se declară folosind construcția `struc <nume structura>`, urmată de o listă de câmpuri și încheiată cu `endstruc`.
 
-Procesoarele x86 moderne dispun de 8 registre cu scop general a căror dimensiune este de 32 de biți. Numele registrelor sunt de natură istorică (spre exemplu: EAX era numit registru acumulator din cauza faptului că este folosit de o serie de instrucțiuni aritmetice, cum ar fi [idiv](https://www.felixcloutier.com/x86/idiv)). In timp ce majoritatea registrelor și-au pierdut scopul special, devenind “general purpose” în ISA-ul modern(EAX, EBX, ECX, EDX, ESI, EDI), prin convenție, 2 și-au pastrat scopul inițial: ESP (stack pointer) și EBP (base pointer).
+Fiecare câmp al structurii este definit prin următoarele: o etichetă (folosită pentru a putea accesa membrii), specificatorul de tip și numărul de elemente.
 
-### Subsecțiuni ale registrelor
-
-În anumite cazuri dorim să modificăm valori ce sunt reprezentate pe mai puțin de 4 octeți (spre exemplu, lucrul cu șiruri de caractere). Pentru aceste situații, procesoarele x86 ne oferă posibilitatea de a lucra cu subsectiuni de 1, respectiv 2 octeți ale registrelor EAX, EBX, ECX, EDX.
-
-În imaginea de mai jos sunt reprezentate registrele, subregistrele și dimensiunile lor.
-
-![Registre x86_32](images/registers.png)
-
-> **WARNING**: Subregistrele fac parte din registre, ceea ce înseamnă că dacă modificăm un registru, în mod implicit modificăm și valoarea subregistrului.
-
-> **NOTE**: Subregistrele se folosesc în mod identic cu registrele, doar că dimensiunea valorii reținute este diferită.
-
-> **NOTE**: Pe lângă registrele de bază mai există și șase registre segment corespunzătoare unor anumite zone după cum se observă în imagine:
->
-> ![Registre Segment](images/segments.png)
-
-### Declarări statice de regiuni de memorie
-
-Declarările statice de memorie (analoage declarării variabilelor globale), în lumea x86, se fac prin intermediul unor directive de asamblare speciale. Aceste declarări se fac în secțiunea de date (regiunea .DATA). Porțiunilor de memorie declarate le pot fi atașate un nume prin intermediul unui label pentru a putea fi referite ușor mai târziu în program. Urmăriți exemplul de mai jos:
-
+Exemplu:
 ```Assembly
-.DATA
-    var        DB 64    ; Declară un octet conținând valoarea 64. Etichetează
-                        ; locația de memorie cu "var".
-    var2       DB ?     ; Declară un octet neinițializat etichetat cu "var2".
-               DB 10    ; Declară un octet neetichetat, inițializat cu 10. Acest
-                        ; octet va fi plasat la adresa (var2 + 1).
-    X          DW ?     ; Declară un cuvânt(2 octeți) neinițializat, etichetat cu "X".
-    Y          DD 3000  ; Declară un cuvânt dublu (4 octeți) cu eticheta "Y",
-                        ; inițializat cu valoarea 3000.
-    Z          DD 1,2,3 ; Declară 3 cuvinte duble (a câte 4 octeți fiecare)
-                        ; incepând cu adresa "Z" și inițializate cu 1, 2, respectiv 3.
-                        ; De exemplu, 3 va fi plasat la adresa (Z + 8).
+struc mystruct
+    a:    resw 1    ; a va referi un singur element de dimensiune un cuvânt
+    b:    resd 1    ; b va referi un singur element de dimensiune un dublu cuvânt
+    c:    resb 1    ; c va referi un singur element de dimensiune un octet
+    d:    resd 1    ; d va referi un singur element de dimensiune un dublu cuvânt
+    e:    resb 6    ; e va referi 6 elemente de dimensiune un octet
+endstruc
 ```
 
-> **NOTE**: DB, DW, DD sunt directive folosite pentru a specifica dimensiunea porțiunii:
-> | Directivă | Rol | Dimensiune |
-> | ----------|-----|----------- |
-> | DB | Define Byte | 1 octet (8 biți) |
-> | DW | Define Word | 2 octeți (16 biți) |
-> | DD | Define Double Word | 4 octeți (32 biți) |
+>**NOTE**: Aici sunt folosite pseudo-instrucțiunile NASM din familia `res` pentru a defini tipul de date și numărul de elemente pentru fiecare dintre câmpurile structurii. Pentru mai multe detalii despre sintaxa `res` urmați acest link: https://www.nasm.us/doc/nasmdoc3.html#section-3.2.2
 
-> **NOTE**: Sunt mai multe tipuri de regiuni de memorie după cum se poate observa și în imaginea de mai jos:
->
-> ![Sectiuni de memorie](images/sections.jpg)
+Fiecare etichetă ce definește un câmp reprezintă offset-ul câmpului în cadrul structurii. De exemplu, `b` va avea valoarea 2, deoarece sunt 2 octeți de la începutul structurii până la câmpul `b` (primii 2 octeți sunt ocupați de cuvântul `a`).
 
-Ultima declarare din exemplul de mai sus reprezintă declararea unui vector. Spre deosebire de limbajele de nivel mai înalt, unde vectorii pot avea multiple dimensiuni, iar elementele lor sunt accesate prin indici, în limbajul de asamblare vectorii sunt reprezentați ca un număr de celule ce se află intr-o zonă contiguă de memorie.
-
-## Adresarea Memoriei
-
-Procesoarele x86 moderne pot adresa pana la 2^32 bytes de memorie, ceea ce înseamnă că adresele de memorie sunt reprezentate pe 32 de biți. Pentru a adresa memoria, procesorul folosește adrese (implicit, fiecare label este translatat într-o adresa de memorie corespunzătoare). Pe lângă label-uri mai există și alte forme de a adresa memoria:
-
-```Assembly
-mov eax, [0xcafebab3]         ; directă (deplasament)
-mov eax, [esi]                ; indirectă (bază)
-mov eax, [ebp-8]              ; bazată (bază + deplasament)
-mov eax, [ebx*4 + 0xdeadbeef] ; indexată (index * scală + deplasament)
-mov eax, [edx + ebx + 12]     ; bazată și indexată fără scală (bază + index + deplasament)
-mov eax, [edx + ebx*4 + 42]   ; bazată și indexată cu scală (bază + index * scală + deplasament)
-```
-
-> **WARNING**: Următoarele adresări sunt invalide:
->
+>**WARNING**: Dacă doriți să folosiți același nume de câmp în două structuri diferite, trebuie să prefixați numele etichetei cu ``.`` (dot) astfel:
 > ```Assembly
-> mov eax, [ebx-ecx]     ; Registrele pot fi doar adunate
-> mov [eax+esi+edi], ebx ; Calculul adresei poate conține cel mult 2 registre
-> ```
-
-### Directive de dimensiune
-
-În general, dimensiunea pe care este reprezentată o valoare ce este adusă din memorie poate fi inferată (dedusă) din codul instrucțiunii folosite. Spre exemplu, în cazul adresărilor de mai sus, dimensiunea valorilor putea fi inferată din dimensiunea registrului destinație, însă în anumite cazuri acest lucru nu este atât de evident. Să urmarim urmatoarea instrucțiune:
-
-```Assembly
-mov [ebx], 2
-```
-
-Dupa cum se observă, se dorește stocarea valorii 2 la adresa conținută de registrul ebx. Dimensiunea registrului este de 4 bytes. Valoarea 2 poate fi reprezentată atât pe 1 cât și pe 4 bytes. În acest caz, din moment ce ambele interpretări sunt valide, procesorul are nevoie de informații suplimentare despre cum să trateze această valoare. Acest lucru se poate face prin directivele de dimensiune:
-
-```Assembly
-mov byte [ebx], 2  ; Mută valoarea 2 în octetul de la adresa conținută în EBX.
-mov word [ebx], 2  ; Mută întregul 2 reprezentat pe 16 biți în cei 2 octeți
-                   ; începând de la adresa conținută în EBX
-mov dword [ebx], 2 ; Mută întregul 2 reprezentat pe 32 de biți în cei 4 octeți
-                   ; începând de la adresa conținută în EBX
-```
-
-### Instrucțiunea loop
-
-Instrucțiunea loop se folosește pentru bucle cu un număr de iterații prestabilit, încărcat în registrul ECX. Sintaxa ei este urmatoarea:
-
-```Assembly
-mov ecx, 10 ; Inițializează ECX cu numărul de iterații
-label:
-; conținutul buclei
-loop label
-```
-
-La fiecare iterație, se decrementează registrul ECX și se verifică dacă este diferit de 0. În acest caz, se sare la eticheta precizată. Există și alte forme ale instrucțiunii care verifică, în plus, flagul ZF:
-
-| Mnemonică | Descriere |
-| ----------|---------- |
-| LOOPE/LOOPZ label | Decrementează ECX; sari la eticheta label dacă ECX != 0 și ZF == 1 |
-| LOOPNE/LOOPNZ label | Decrementează ECX; sari la eticheta label dacă ECX != 0 și ZF != 1 |
-
-> **NOTE**: Ceea ce trebuie să aveți în vedere atunci când utilizați salturi într-un program scris în limbaj de asamblare este diferența dintre short jump(near jump) și long jump(far jump).
-> | Tip și exemplu | Dimensiune și semnificație | Descriere |
-> | ---------------|----------------------------|---------- |
-> | Short Jump (loop) | 2 octeți (un octet pentru opcode(Operation Code) și un octet pentru adresă) | adresa relativă a instrucțiunii către care se dorește să se facă jump-ul trebuie să nu fie la distanță mai mare de 128 octeți față de adresa instrucțiunii curente |
-> | Long Jump (jmp) | 3 octeți (un octet pentru opcode(Operation Code) și doi octeți pentru adresă) | adresa relativă a instrucțiunii către care se dorește să se facă jump-ul trebuie să nu fie la distanță mai mare de 32768 octeți față de adresa instrucțiunii curente |
-
-## Tutoriale și exerciții
-
-> **NOTE**: În cadrul laboratoarelor vom folosi repository-ul de git al materiei IOCLA - <https://github.com/systems-cs-pub-ro/iocla>. Repository-ul este clonat pe desktop-ul mașinii virtuale. Pentru a îl actualiza, folosiți comanda git pull origin master din interiorul directorului în care se află repository-ul (~/Desktop/iocla). Recomandarea este să îl actualizați cât mai frecvent, înainte să începeți lucrul, pentru a vă asigura că aveți versiunea cea mai recentă.Dacă doriți să descărcați repository-ul în altă locație, folosiți comanda git clone <https://github.com/systems-cs-pub-ro/iocla> ${target}.Pentru mai multe informații despre folosirea utilitarului git, urmați ghidul de la [Git Immersion](https://gitimmersion.com/).
-
-### 0. Recapitulare: Descompunerea unui număr în puteri ale lui 2
-
-Pornind de la fișierul sursă `power-2.asm`, realizați un program care descompune un număr în puteri ale lui 2. Numărul va fi pasat prin registrul `eax`.
-
-De exemplu, pentru `eax = 211`, programul vostru va afișa:
-
-```
-1
-2
-16
-64
-128
-```
-
-> **TIP**: Încercați să vă aduceți aminte ce face instrucțiunea test.
-
-### 1. Tutorial: Înmulțirea a două numere reprezentate pe un octet
-
-Parcurgeți, rulați și testați codul din fișierul `multiply.asm`. În cadrul programului înmulțim două numere definite ca octeți. Pentru a le putea accesa folosim o construcție de tipul `byte [register]`.
-
-Atunci cănd facem înmulțire procesul este următorul, așa cum este descris și [aici](https://en.wikibooks.org/wiki/X86_Assembly/Arithmetic):
-
-1. Plasăm deînmulțitul în registrul de deînmulțit, adică:
-    * dacă facem operații pe un byte (8 biți, un octet), plasăm deînmulțitul în registrul `AL`;
-    * dacă facem operații pe un cuvânt (16 biți, 2 octeți, plasăm deînmulțitul în registrul `AX`;
-    * dacă facem operații pe un dublu cuvânt (32 de biți, 4 octeți), plasăm deînmulțitul în registrul `EAX`.
-1. Înmulțitorul este transmis ca argument mnemonicii `mul`. Înmulțitorul trebuie să aibă aceeași dimensiune ca deînmulțitul.
-1. Rezultatul este plasat în două registre (partea high și partea low).
-
-Testați programul. Încercați alte valori pentru num1 și num2.
-
-### 2. Înmulțirea a două numere
-
-Actualizați zona marcată cu `TODO` în fișierul `multiply.asm` pentru a permite înmulțirea și a numelor de tip `word` și `dword`, adică `num1_dw` cu `num2_dw`, respectiv `num1_dd` și `num2_dd`.
-
-> **TIP**: Pentru înmulțirea numerelor de tip word (pe 16 biți), componentele sunt dispuse astfel:
+>struc mystruct1
+>    .a:    resw 1
+>    .b:    resd 1
+>endstruc
 >
-> * În registrul `AX` se plasează deînmulțitul.
-> * Argumentul instrucțiunii, înmulțitorul, `mul` (posibil un alt registru) este pe 16 biți (fie valoare fie un registru precum `BX`, `CX`, `DX`).
-> * Rezultatul înmulțirii este dispus în perechea `DX:AX`, adică partea “high” a `rezultatului în registrul DX, iar partea “low” a rezultatului în registrul AX`.
->
-> Pentru înmulțirea numerelor de tip `dword` (pe 32 biți), componentele sunt dispuse astfel:
->
-> * În registrul `EAX` se plasează deînmulțitul.
-> * Argumentul instrucțiunii, înmulțitorul, mul (posibil un alt registru) este pe 32 biți (fie valoare fie un registru precum `EBX`, `ECX`, `EDX`).
-> * Rezultatul înmulțirii este dispus în perechea `EDX:EAX`, adică partea “high” a rezultatului în registrul `EDX`, iar partea “low” a rezultatului în registrul `EAX`.
-
-> **NOTE**: La afișarea rezultatului folosiți macro-ul `PRINTF32` pentru a afișa cele două registre care conțin rezultatul:
->
-> * Registrele `DX` și `AX` pentru înmulțirea numerelor de tip word.
-> * Registrele `EDX` și `EAX` pentru înmulțirea numerelor de tip dword.
-
-### 3. Tutorial: Suma primelor N numere naturale
-
-În programul `sum_n.asm` este calculată suma primelor num numere naturale.
-
-Urmăriți codul, observați construcțiile și registrele specifice pentru lucru cu bytes. Rulați codul.
-
-> **IMPORTANT**: Treceți la următorul pas doar după ce ați înțeles foarte bine ce face codul. Vă va fi greu să faceți următorul exercițiu dacă aveți dificultăți în înțelegerea exercițiului curent.
-
-### 4. Suma pătratelor primelor N numere naturale
-
-Porniți de la programul `sum_n.asm` și creați un program `sum_n_square.asm` care să calculeze suma pătratelor primelor num numere naturale (num < = 100).
-
-> **TIP**: Registrele `eax` și `edx` le veți folosi la înmulțirea pentru ridicarea la putere (în instrucțiunea `mul`). Astfel că nu veți mai putea folosi (ușor) registrul `eax` pentru stocarea sumei pătratelor. Pentru a reține suma pătratelor aveți două variante:
->
-> 1. (mai simplu) Folosiți registrul `ebx` pentru a reține suma pătratelor.
-> 2. (mai complicat) Înainte de a opera registrul `eax` salvați valoarea sa pe stivă (folosind instrucțiunea `push`), apoi faceți operațiile necesare și apoi restaurați valoarea salvată (folosind instrucțiunea `pop`).
-
-> **NOTE**: Pentru verificare, suma pătratelor primelor 100 de numere naturale este `338350`.
-
-### 5. Tutorial: Suma elementelor dintr-un vector reprezentate pe un octet
-
-În programul `sum_array.asm` este calculată suma elementelor unui vector (array) de octeți (bytes, reprezentare pe 8 biți).
-
-Urmăriți codul, observați construcțiile și registrele specifice pentru lucru cu bytes. Rulați codul.
-
-> **IMPORTANT**: Treceți la următorul pas doar după ce ați înțeles foarte bine ce face codul. Vă va fi greu să faceți exercițiile următoare dacă aveți dificultăți în înțelegerea exercițiului curent.
-
-### 6. Suma elementelor dintr-un vector
-
-În zona marcată cu TODO din fișierul `sum_array.asm` completați codul pentru a realiza suma vectorilor cu elemente de tip word (16 biți) și de tip dword (32 de biți); este vorba de vectorii `word_array` și `dword_array`.
-
-> **TIP**: Când veți calcula adresa unui element din array, veți folosi construcție de forma:
->
-> ```base + size * index```
->
-> În construcția de mai sus:
->
-> * base este adresa vectorului (adică word_array sau `dword_array`)
-> * size este lungimea elementului vectorului (adică 2 pentru vector de word (16 biți, 2 octeți) și 4 pentru vector de dword (32 de biți, 4 octeți)
-> * index este indexul curent în cadrul vectorului
-
-> **NOTE**: Suma elementelor celor trei vectori trebuie să fie:
->
-> * `sum(byte_array): 575`
-> * `sum(word_array): 65799`
-> * `sum(dword_array): 74758117`
-
-### 7. Suma pătratelor elementelor dintr-un vector
-
-Pornind de la programul de la exercițiul anterior, calculați suma pătratelor elementelor dintr-un vector.
-
-> **NOTE**: Puteți folosi vectorul `dword_array`, având însă grijă ca suma pătratelor elementelor conținute să poată fi reprezentată pe 32 de biți.
-
-> **NOTE**: Dacă folosiți construcția de mai jos (vector cu 10 elemente)
->
-> ```
-> dword_array dd 1392, 12544, 7992, 6992, 7202, 27187, 28789, 17897, 12988, 17992
+>struc mystruct2
+>    .a:    resd 16
+>    .b:    resw 1
+>endstruc
 >```
->
-> suma pătratelor va fi 2704560839.
+>Folosiți contrucția `mystruct2.b` pentru aflarea valorii offset-ului lui 'b' din cadrul structurii mystruct2.
 
-### 8. Împărțirea a două numere
+### Instanțierea unei structuri
+O primă variantă pentru a avea o structură în memorie este de a declara-o static în secțiunea `.data`. Sintaxa folosește macro-urile NASM `istruc` și `iend` și keyword-ul `at`.
 
-În programul `divide.asm` sunt calculate câtul și restul a două numere reprezentate pe un octet. Actualizați zona marcată cu `TODO` pentru a realiza împărțirile `dividend2 / divisor2` (împărțitor de tip word) și `dividend3 / divisor3` (împărțitor de tip dword).
+În exemplul următor este prezentată instanțierea statică a structurii declarate mai sus, unde `struct_var`  este adresa din memorie de unde încep datele.
 
-În mod similar instrucțiunii `mul`, regiștrii în care este plasat deîmpărțitul variază în funcție de dimensiunea de reprezentare a împărțitorului. Împărțitorul este transmis ca argument mnemonicii `div`.
+```Assembly
+struct_var:
+    istruc mystruct
+        at a, dw        -1
+        at b, dd        0x12345678
+        at c, db        ' '
+        at d, dd        23
+        at e, db        'Gary', 0
+    iend
+```
+În cazul în care definiți câmpurile structurii folosind . (dot), instanțierea structurii se face în felul următor:
+```Assembly
+struct_var:
+    istruc mystruct
+        at mystruct.a, dw        -1
+        at mystruct.b, dd        0x12345678
+        at mystruct.c, db        ' '
+        at mystruct.d, dd        23
+        at mystruct.e, db        'Gary', 0
+    iend
+```
 
-> **TIP**: Dacă împărțitorul este de tip `byte` (8 biți), componentele sunt dispuse astfel:
->
-> * deîmpărțitul este plasat în registrul `AX`
-> * argumentul instrucțiunii `div` are 8 biți și poate fi reprezentat de un registru sau de o valoare imediată
-> * câtul este dispus în `AL`
-> * restul este dispus în `AH`
->
-> Dacă împărțitorul este de tip `word` (16 biți), componentele sunt dispuse astfel:
->
-> * deîmpărțitul este dispus în perechea `DX:AX`, adică partea sa `high` în registrul `DX`, iar partea `low` în `AX`
-> * argumentul instrucțiunii `div` are 16 biți și poate fi reprezentat de un registru sau de o valoare imediată
-> * câtul este dispus în `AX`
-> * restul este dispus în `DX`
->
-> Dacă împărțitorul este de tip `dword` (32 de biți), componentele sunt dispuse astfel:
->
-> * deîmpărțitul este dispus în perechea `EDX:EAX`, adică partea sa `high` în registrul `EDX`, iar partea `low` în `EAX`
-> * argumentul instrucțiunii `div` are 32 de biți și poate fi reprezentat de un registru sau de o valoare imediată
-> * câtul este dispus în `EAX`
-> * restul este dispus în `EDX`
+>**WARNING**: Pentru a nu inițializa valorile membrilor greșit, va trebui să aveți grijă ca pentru fiecare câmp, tipul de date din instanțiere să corespundă tipului din declarare.
 
-> **TIP**: Dacă programul vă dă “SIGFPE. Arithmetic exception”, cel mai probabil aţi uitat să iniţializaţi partea superioară a deîmpărţitului (AH, DX sau EDX).
+### Accesarea valorilor dintr-o structură
+Pentru a accesa și/sau modifica un anumit membru al structurii instanțiate trebuie să îi cunoaștem adresa. Această adresă se poate obține calculând suma dintre adresa de început a structurii și offset-ul din cadrul structurii al membrului dorit.
 
-### 9. Bonus: Numărul de numere negative și pozitive dintr-un vector
+Următoarea secvență de cod prezintă punerea unei valori în câmpul b al structurii și, ulterior, afișarea valorii acestui câmp.
+```Assembly
+mov eax, 12345
+mov dword [struct + b], eax ; adresa câmpului b este adresa de bază a structurii instanțiate static + offset-ul câmpului (dat de eticheta 'b')
 
-Creați un program care afișează numărul de numere negative, respectiv numărul de numere pozitive dintr-un vector.
+mov ebx, dword [struct + b] ; punerea valorii din câmpul b în registrul ebx pentru afișare
+PRINTF32 `%d\n\x0`, ebx
+```
 
-> **NOTE**: Definiți un vector care să conțină atât numere negative cât și numare pozitive.
+## Vectori
+Putem considera un vector ca o înșiruire de elemente de același tip, plasate contiguu în memorie. Ați observat ceva similar în laboratoarele trecute când declaram static șiruri de caractere în secțiunea .data.
 
-> **TIP**: Folosiți intrucțiunea `cmp` și mnemonici de salt condițional. Urmăriți detalii aici.
+### Declararea unui vector
+În general, datele statice declarate pot fi inițializate sau neinițializate. Diferențierea se face atât prin faptul că la datele inițializate oferim o valoare inițială, dar și prin sintaxa NASM folosită.
+De exemplu, pentru a declara un vector de 100 de cuvinte inițializate cu valoarea 42, vom folosi construcția:
+```Assembly
+section .data
+    myVect:    times 100    dw 42
+```
+Pe de altă parte, dacă dorim declararea unui vector de 20 de elemente dublu cuvinte neinițializate, folosim instrucțiuni din familia ``res`` astfel:
+```Assembly
+section .bss
+    myVect:    resd 20
+```
 
-> **TIP**: Intrucțiunea `inc` urmată de un registru incrementează cu 1 valoarea stocată în acel registru.
+## Vectori de structuri
+Adesea vom avea nevoie de vectori care să conțină elemente de dimensiuni mai mari decât cea a unui cuvânt dublu. Pentru a obține acest lucru vom combina cele două concepte prezentate anterior și vom folosi vectori de structuri. Bineînțeles, instrucțiunile de operare pe șiruri nu vor funcționa, deci vom fi nevoiți să ne întoarcem la metoda clasică de accesare a elementelor: cea prin adresarea explicită a memoriei.
 
-### 10. Bonus: Numărul de numere pare și impare dintr-un vector
+Pentru exemplul din această secțiune, creăm o structură ce reprezintă un punct într-un spațiu 2D.
 
-Creați un program care afișează numărul de numere pare, respectiv numărul de numere impare dintr-un vector.
+```Assembly
+struc point
+    .x:    resd 1
+    .y:    resd 1
+endstruc
+```
 
-> **TIP**: Puteți folosi instrucțiunea `div` pentru a împărți un număr la 2 și pentru a compara apoi restul împărțirii cu 0.
+### Declararea unui vector de structuri
+ Deoarece NASM nu suportă niciun mecanism pentru a declara explicit un vector de structuri, va trebui să declarăm efectiv o zonă de date în care să încapă vectorul nostru.
 
-> **NOTE**: Pentru testare folosiți un vector doar cu numere pozitive. Pentru numere negative trebuie să faceți extensie de semn; ar merge și fără pentru că ne interesează doar restul, dar nu am fi riguroși :-)
+Considerând că ne dorim un vector zeroizat de 100 de elemente de tipul structurii point (care este de dimensiune 8 octeți), trebuie să alocăm 100 * 8 (= 800) octeți.
 
-### Links
+Obținem:
+```Assembly
+section .data
+    pointArray:    times 800    db 0
+```
+În plus, NASM oferă o alternativă la calculul “de mână” al dimensiunii unei structuri, generând automat macro-ul `<nume structura>_size`. Astfel, exemplul anterior poate deveni:
+```Assembly
+section .data
+    pointArray:    times point_size * 100    db 0
+```
+Dacă ne dorim să declarăm un vector de structuri neinițializat putem folosi:
+```Assembly
+section .bss
+    pointArray:    resb point_size * 100
+```
 
-* [X86 Instruction reference](https://www.felixcloutier.com/x86/index.html)
-* [Alte cursuri de assembler](https://www.cs.virginia.edu/~evans/cs216/guides/x86.html)
+### Parcurgerea unui vector de structuri
+Cum am mai spus, pentru accesarea câmpului unui element dintr-un vector trebuie să folosim adresarea normală (în particular adresarea “based-indexed with scale”). Formula pentru aflarea adresei elementului este `baza_vector + i * dimensiune_struct`.
+
+Presupunând că avem în registrul `ebx` adresa de început a vectorului și în `eax` indicele elementului pe care dorim să îl accesăm, exemplul următor prezintă afișarea valorii câmpului y a acestui element.
+```Assembly
+mov ebx, pointArray                         ; mutăm în ebx adresa de început a șirului
+mov eax, 13                                 ; să zicem că vrem al 13-lea element
+mov edx, [ebx + point_size * eax + point.y] ; se calculează adresa câmpului dorit între []
+                                            ; și apoi se transferă valoarea de la acea adresă
+                                            ; în registrul edx
+
+PRINTF32 `%u\n\x0`, edx
+```
+Parcurgem vectorul, având la fiecare iterație indicele curent în registrul eax. Putem să afișăm valorile din ambele câmpuri ale fiecărui element din vector cu următorul program:
+```Assembly
+struc   point
+	.x: resd 1
+	.y: resd 1
+endstruc
+
+section .data
+    pointArray: times point_size * 100 db 0
+
+section .text
+    global CMAIN
+
+CMAIN:
+    push ebp
+    mov ebp, esp
+
+    xor edx, edx
+    xor eax, eax
+label:
+    mov edx, [pointArray + point_size * eax + point.x] ; accesăm membrul x
+    PRINTF32 `%u\n\x0`, edx
+
+    mov edx, [pointArray + point_size * eax + point.y] ; accesăm membrul y
+    PRINTF32 `%u\n\x0`, edx
+
+    inc eax ; incrementarea indicelui de iterare
+    cmp eax, 100
+    jl label
+
+    leave
+    ret
+```
+
+## Exerciții
+>**IMPORTANT**: În cadrul laboratoarelor vom folosi repository-ul de git al materiei IOCLA - [https://github.com/systems-cs-pub-ro/iocla](https://github.com/systems-cs-pub-ro/iocla). Repository-ul este clonat pe desktop-ul mașinii virtuale. Pentru a îl actualiza, folosiți comanda `git pull origin master` din interiorul directorului în care se află repository-ul (`~/Desktop/iocla`). Recomandarea este să îl actualizați cât mai frecvent, înainte să începeți lucrul, pentru a vă asigura că aveți versiunea cea mai recentă. Dacă doriți să descărcați repository-ul în altă locație, folosiți comanda `git clone https://github.com/systems-cs-pub-ro/iocla ${target}`.
+Pentru mai multe informații despre folosirea utilitarului `git`, urmați ghidul de la [Git Immersion](https://gitimmersion.com/).
+
+### 0. Recapitulare: Fibonacci sum
+Pornind de la fișierul `fibo_sum.asm`, implementați un program care calculează suma primelor N numere din șirul fibonacci utilizând instrucțiunea `loop`. Suma primelor 9 este 54.
+
+>**NOTE**: Puteți să investigați secțiunea [Instrucțiuni de transfer de date](https://ocw.cs.pub.ro/courses/iocla/laboratoare/laborator-04#instructiuni_de_transfer_de_date) din laboratorul 4.
+
+### 1. Tutorial: Afișarea conținutului unei structuri
+În programul `print_structure.asm` sunt afișate câmpurile unei structuri.
+
+Urmăriți codul, observați construcțiile și modurile de adresare a memoriei. Rulați codul.
+
+>**IMPORTANT**: O explicație utilă pentru instrucțiunea lea o găsiți: [aici](https://www.aldeid.com/wiki/X86-assembly/Instructions/lea)
+
+>**IMPORTANT**: Treceți la următorul pas doar după ce ați înțeles foarte bine ce face codul. Vă va fi greu să faceți următorul exercițiu dacă aveți dificultăți în înțelegerea exercițiului curent.
+
+### 2. Modificarea unei structuri
+Scrieți cod în cadrul funcției `main` astfel încât să modificați câmpurile structurii `sample_student` pentru ca:
+
+*    anul nașterii să fie `1993`
+*    vârsta să fie `22`
+*    grupa să fie `323CA`
+
+>**WARNING**: Nu modificați ce se afișează, modificați codul structurii. Nu vă atingeți de codul de afișare, acel cod trebuie să rămână același. Trebuie să adăugați la începutul funcției `main`, în locul marcat cu `TODO` codul pentru modificarea structurii.
+
+>**WARNING**: Trebuie să modificați conținutul structurii din cod, adică trebuie să scrieți în zona de memorie aferentă câmpului din structură. Nu modificați structura din secțiunea `.data`, este vorba să folosiți cod pentru a modifca structura.
+
+>**TIP**: Pentru modificarea grupei, va trebui să schimbați al treilea octet/caracter al câmpului `group` (adică octetul/caracterul cu indexul 2).
+
+### 3. Getter
+În fișierul `getter_setter_printf.asm` implementați funcțiile `get_int`, `get_char`, respectiv `get_string`, ce vor returna valorile câmpurilor `int_x`, `char_y`, respectiv `string_s` din structura `my_struc`. Valorile vor fi returnate prin registrul `eax`.
+
+>**TIP**: Funcțiile primesc ca argument un pointer la începutul structurii. Parametrul se află la adresa `ebp + 8` și pentru a fi folosit ca pointer, trebuie citită valoarea sa într-un registru (ex. registrul `ebx`).
+
+Output-ul programului după o rezolvare corectă este:
+```
+1000
+a
+My string is better than yours
+```
+Urmăriți comentariile marcate cu **TODO**.
+
+### 4. Setter
+Mai departe, implementați funcțiile `set_int`, `set_char`, respectiv `set_string`, ce vor suprascrie valorile câmpurilor `int_x`, `char_y`, respectiv `string_s` din `structura my_struc` cu noile valori date.
+
+>**TIP**: Funcțiile primesc doi parametri - un pointer la începutul structurii, ca la exercițiul anterior, și o valoare care trebuie să fie folosită ca sursă pentru atribuire. Cei doi parametri sunt în ordine la adresele `ebp + 8` (primul parametru) și `ebp + 12` (al doilea parametru).
+
+Output-ul programului după o rezolvare corectă este:
+```
+2000
+b
+Are you sure?
+```
+Urmăriți comentariile marcate cu `TODO`.
+
+### 5. Printf
+În funcția `main`, afișați câmpurile structurii utilizând apeluri ale funcției `printf`. Verificați că programul afișază valorile corespunzătoare cu, respectiv fără, folosirea funcțiilor `set_*`. Puteți folosi formaturile de la liniile 10-12 pentru a printa câmpurile.
+
+### 6. Bonus: Căutarea unui subșir într-un șir
+Găsiți toate aparițiile subșirului `substring` în șirul `source_text` din fișierul `find_substring.asm`.
+
+Afișați rezultatele sub forma:
+```
+Substring found at index: <N>
+```
+>**IMPORTANT**: Nu puteți folosi funcția de bibliotecă `strstr` (sau similar) pentru acest subpunct.
+
+>**TIP**: Pentru afișare puteți folosi atât macro-ul `PRINTF32`, cât și funcția `printf`, ca la exercițiile anterioare. Pașii pentru afișare folosind `printf` sunt următorii:
+> - puneți pe stivă valoarea pe care vreți să o afișați (poziția unde a fost găsit subșirul)
+> - puneți pe stivă adresa șirului `print_format`
+> - apelați funcția `printf`
+> - curățați parametrii adăugați anterior de pe stivă prin adăugarea valorii 8 la registrul `esp` (fiecare dintre parametri are 4 octeți).
 
 ## Soluții
-
-Soluțiile pentru exerciții sunt disponibile [aici](https://elf.cs.pub.ro/asm/res/laboratoare/lab-06-sol.zip).
+Soluțiile pentru exerciții sunt disponibile: [aici](https://elf.cs.pub.ro/asm/res/laboratoare/lab-07-sol.zip)
