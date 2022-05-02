@@ -1,2 +1,2 @@
-PROGNAME := print-structure
+PROGNAME := gcd
 include ../../utils/Makefile.generic

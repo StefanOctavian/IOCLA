@@ -1,2 +1,2 @@
-PROGNAME := fibo-sum
+PROGNAME := max
 include ../../utils/Makefile.generic

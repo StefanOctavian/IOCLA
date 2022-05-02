@@ -1,2 +1,2 @@
-PROGNAME := getter-setter-printf
+PROGNAME := stack-addressing
 include ../../utils/Makefile.generic
