@@ -1,242 +1,446 @@
-# Laborator 08: Lucrul cu stiva
+# Laborator 09: Apeluri de funcții
 
-În acest laborator vom învăța cum este reprezentată stiva in limbajul de asamblare, care este utilitatea ei si cum se programeaza cu ajutorul acesteia.
+În acest laborator vom prezenta modul în care se realizează apeluri de funcții. Vom vedea cum putem folosi instrucțiunile `call` și `ret` pentru a realiza apeluri de funcții și cum folosim stiva pentru a transmite parametrii unei funcții.
 
-## Terminologie
-
-In lumea algoritmicii, stiva este o structura de date abstracta prin intermediul careia se poate reprezenta informatie ce respecta regula “primul venit, ultimul servit”.
-
-In lumea programarii assembly, stiva este o zona rezervata de memorie folosita pentru a tine evidenta operatiilor interne ale unui program: functii, adrese de retur, parametrii pasati, etc. Astfel, stiva poate fi vazuta ca o implementare la nivel hardware a stivei abstracte.
-
-## Utilitatea stivei
-
-* **Apeluri de functii.** Fiecare apel de functie necesita, printre altele, memorarea adresei de retur. Imaginati-va ca aveti un numar de functii N ce se apeleaza succesiv : prima functie o apeleaza pe a 2-a, a 2-a pe a 3-a si asa mai departe; cand functia N a fost apelata si si-a terminat executia, programul trebuie sa continue in contextul in care a avut loc apelul. Daca retinem adresele de retur intr-o stiva, ordinea apelurilor se pastreaza in mod natural.
-
-* **Salvarea registrelor**. De asemenea, de fiecare data cand se apeleaza o functie, exista riscul ca registrele sa fie folosite de functia apelata. Prin urmare, valorile acestora se pierd si flow-ul programului se strica. Pentru a evita acest comportament, valorile registrelor se pot salva temporar, pana la sfarsitul apelului functiei, pe stiva. Acest lucru se poate face in doua moduri:
-
-    1. Se salveaza independent fiecare registru ce poate fi suprascris in apel cu ajutorul instructiunii `push`. Problema apare din cauza ca apelantul nu poate cunoaste in prealabil ce registre se pot strica.
-
-    1. Se salveaza toate registrele cu ajutorul instructiunii `pusha`. Aici dezavantajul apare cauzat de faptul ca operatia se face considerabil mai lent. In acelasi timp, vom vedea in laboratorul urmator ca functiile cu tip **returneaza** cu ajutorul registrului `eax` rezultatul. La folosirea instructiunii `popa`, responsabila pentru restaurarea registrelor, valoare lui `eax` va fi pierduta.
-
-* **Variabile temporare.** In general, programele folosesc un numar mare de variabile si rezultate partiale; avand in vedere ca exista un numar limitat de registre, este posibil ca la un moment dat, sa nu avem niciun registru disponibil pentru a retine valoarea unei operatii. In cazul acesta, putem memora rezultatul la o adresa de memorie pe care o definim in zona de date. Aceasta metoda are dezavantajul ca vom “polua” tabela de offset-uri cu variabile pe care le folosim o singura data. In loc sa facem aceasta pentru fiecare rezultat partial, este mai usor sa punem pe stiva valoarea unui registru pentru a il putea folosi si a o recupera in momentul in care nu mai folosim variabila temporara.
+Laboratorul este de forma *learn by doing*, partea practică alternând între secțiuni de tip tutorial, cu parcurgere pas cu pas și prezentarea soluției, și exerciții care trebuie să fie rezolvate.
 
 
-## Operatii asupra stivei
+## Cunoștințe și abilități ce vor fi dobândite
 
-Stiva poate fi modificata in 2 moduri:
+- Traducerea apelului și implementării unei funcții din limbajul C în limbaj de asamblare
+- Transmiterea parametrilor in diferite arhitecturi.
+- Folosirea instrucțiunilor `call` și `ret` pentru a realiza un apel de funcție
+- Implementarea unei funcții în limbaj de asamblare
+- Folosirea stivei pentru a transmite parametrii unei funcții
+- Apelarea unei funcții externe (aflată în biblioteca standard C) din limbaj de asamblare
 
-1. Prin utilizarea instructiunilor special implementate pentru lucrul cu stiva, dintre care cele mai uzuale sunt `push` si `pop`:
+## Transmiterea Parametrilor
 
-```assembly
-%include "io.asm"
+Cand vine vorba de a chema o functie cu parametri exista doua mari optiuni de plasare a acestora:
 
-section .text
-global CMAIN
-CMAIN:
+1. **Plasarea in registre** - aceasta metoda, in mod intuitiv, presupune transmiterea parametrilor cu ajutorul registrelor.
 
-    mov eax, 7
-    mov ebx, 8
+    **Avantaje**
+
+    - Este foarte usor de folosit atunci cand numarul parametrilor este mic.
+    - Este foarte rapida, intrucat parametrii sunt imediat accesibili din registre.
+
+    **Dezavantaje**
+
+    - Din cauza faptului ca exista un numar limitat de registre, numarul de parametri ai unei functii ajunge sa fie limitat.
+    - E foarte probabil ca unele registre sa fie folosite in interiorul functiei apelate si devine necesara salvarea temporara a registrelor pe stiva inaintea apeluluide functie. Astfel, cel de-al doilea avantaj enumerat dispare, deoarece accesul la stiva presupune lucru cu memoria, adica latenta crescuta.
+
+2. **Plasarea pe stivă** - aceasta metoda presupune push-uirea pe stiva a tuturor parametrilor.
+    **Avantaje**
+
+    - Poate fi transmis un numar mare de parametri.
+
+    **Dezavantaje**
+
+    - Este lenta intrucat se face acces la memorie.
+    - Mai complicata din punct de vedere al accesului la parametri.
+
+> **_NOTE:_**  Pentru arhitecturiile **32-bit** se foloseste metoda plasarii pe stiva, iar pentru cele **64-bit** se foloseste metoda plasarii in registre. Noi vom folosi conventia de la 32-bit architecture.
+
+
+## Apelul unei funcții
+
+Atunci când apelăm o funcție, pașii sunt următorii:
+  - Punem argumentele pe stivă, apelul de tip push fiind în ordinea inversă în care sunt trimiși ca argumente funcției.
+  - Apelăm `call`.
+  - Restaurăm stiva la sfârșitul apelului.
+
+
+### Funcționarea stivei
+
+După cum știm, operațiile pe stivă sunt de două tipuri:
+
+- `push val` în care valoarea `val` este plasată pe stivă
+- `pop reg/mem` în care ce se găsește în vârful stivei se plasează în registru sau într-o zonă de memorie
+
+În momentul în care se face `push` spunem că stiva **crește** (se adaugă elemente). Din motive ce vor fi explicate mai bine la SO, pointerul de stivă (indicat de registrul `esp` pe 32 de biți) scade in valoare atunci cand **stiva creste** (la `push`). Putem spune totusi ca aceasta contrazicere in numire vine de la faptul ca stiva este deregula reprezentata pe verticala si valorile mici se afla sus, iar valorile mari se afla jos.
+
+La fel, în momentul în care facem `pop` spunem că stiva **scade** (se scot elemente). Acum pointer-ul de stivă (indicat de registrul `esp` pe 32 de biți) crește valoric.
+
+Un sumar al acestui lucru este explicat foarte bine la acest [link](https://en.wikibooks.org/wiki/X86_Disassembly/The_Stack).
+
+Spre exemplu, daca avem functia foo cu urmatoarea semnatura (in limbaj C):
+```C
+int foo(int a, int b, int c);
+```
+Apelul acestei functii va arata astfel:
+```Assembly
+mov ecx, [c]     ; luam valoarea parametrului c dintr-o zona de memorie
+mov ebx, [b]
+mov eax, [a]
+
+push ecx         ; punem parametrii in ordine inversa, incepand cu c
+push ebx         ; apoi b
+push eax         ; apoi a
+call foo         ; apelam functia
+add esp, 12      ; restauram stiva
+```
+
+## Apelantul si Apelatul
+Atunci când apelăm o funcție spunem că funcția care apelează (contextul care apelează) se cheamă **apelant** (sau **caller**), iar funcția apelată se cheamă **apelat** (sau **callee**). In paragraful anterior am discutat despre cum arată lucrurile la nivelul apelantului (cum construim stiva).
+
+ Haideți să urmărim ce se întâmplă si la la nivelul apelatului. Până în momentul instrucțiunii `call` stiva conține parametrii funcției. Apelul `call` poate fi echivalat grosier următoarei secvențe:
+```Assembly
+push eip
+jmp function_name
+```
+
+Adică și apelul `call` folosește în continuare stiva și salvează adresa următoarei instrucțiuni, cea de după `call` numită și instrucțiunea de retur sau adresa de retur (return address). Aceasta este necesară pentru a ști, în apelat, unde să revenim în apelant.
+
+
+În apelat, la începutul său (numit preambul, preamble) se salvează frame pointer-ul (în arhitectura i386 este vorba de registrul `ebp`) urmând ca frame pointer-ul să refere adresa curentă de pe stivă (adică tocmai fostul frame pointer). Deși nu este obligatorie, salvarea frame pointer-ului ajută la debugging și este în cele mai multe cazuri folosită. Din aceste motive, orice apel de funcție va avea în general, preambulul:
+```Assembly
+push ebp
+mov ebp, esp
+```
+
+Aceste modificări au loc în apelat. De aceea este responsabilitatea acestuia să restaureze stiva la vechea sa valoare. De aceea este uzuală existența unui epilog care să readucă stiva la starea sa inițială; acest epilog este:
+```Assembly
+leave
+```
+Dupa aceasta instructiune, stiva este ca la începutul funcției (adică imediat după call).
+
+Pentru incheierea functiei, este necesar ca executia codului sa se intoarca (return) si sa continue sa execute de la instructiunea de dupa `call`-ul care a pornit functia. Acest lucru presupune sa influentam registrul `eip` si sa punem valoarea care a fost salvata pe stiva initial de apelul `call`. Acest lucru este indeplinit folosind instructiunea:
+```Assembly
+ret
+```
+care este grosier echivalentul instrucțiunii:
+```Assembly
+pop eip
+```
+
+
+Spre exemplu, definitia si corpul functiei foo, care realizeaza suma a 3 numere, vor arata astfel:
+
+```Assembly
+foo:
+    push ebp
+    mov ebp, esp
+
+    mov eax, [ebp + 8]
+    mov ebx, [ebp + 12]
+    mov ecx, [ebp + 16]
+
     add eax, ebx
-    push eax                 ; pune pe stiva continutul registrului eax
-    mov eax, 10              ; acum putem folosi registrul, intrucat valoarea lui este salvata pe stiva
-    PRINTF32 `%d \n\x0`, eax ; 10
+    add eax, ecx
 
-    pop eax                  ; recupereaza valoarea registrului eax
-    PRINTF32 `%d \n\x0`, eax ; 15
-```
-
-1. Adresand memoria, cu ajutorului registrului in care este tinut pointerul catre capul stivei (“stack pointer”) `esp`:
-
-```assembly
-%include "io.asm"
-
-section .text
-global CMAIN
-CMAIN:
-    mov eax, 7
-    mov ebx, 8
-    add eax, ebx
-    sub esp, 4           ; rezerva 4 octeti pe stiva
-    mov [esp], eax       ; muta la noua adresa catre care pointeaza esp continutul registrului eax
-    mov eax, 10
-    PRINTF32 `%d \n\x0`, eax
-
-    mov eax, [esp]       ; recupereaza valoarea de pe stiva
-    add esp, 4           ; restabileste valoarea registrului esp
-    PRINTF32 `%d \n\x0`, eax
-```
-
-> **IMPORTANT:** Comentati instructiunile `sub esp, 4` si `add esp, 4`. Ce se intampla? De ce?
-
-> **NOTE:** Stiva este folosita pentru a memora adresa de retur in momentul in care o functie este apelata
-
-**Remarcati faptul ca stiva creste de la adrese mari la adrese mici.** Acesta este motivul pentru care alocarea memoriei pe stiva se face folosind instructiunea sub, iar eliberarea se face folosind instructiunea add.
-
-
-![stack_image](./images/stack.png)
-
-Unele procesoare nu au suport pentru lucrul cu stiva: spre exemplu, procesoarele [MIPS](https://en.wikipedia.org/wiki/MIPS_architecture) nu au instructiuni `push` si `pop` si nici un registru special pentru stack pointer. Astfel, daca am dori sa implementam operatiile pe stiva in procesorul MIPS aceasta s-ar realiza exact ca in exemplul de mai sus, doar ca am putea sa ne alegem noi orice registru pentru a tine minte stack pointerul.
-
-Asadar, instructiunea `push eax`, pe un procesor x86, este echivalenta cu:
-
-```assembly
-sub esp, 4
-mov [esp], eax
-```
-
-Iar instructiunea `pop eax`:
-
-```assembly
-mov eax, [esp]
-add esp, 4
-```
-
-> **IMPORTANT:** Trebuie sa avem grija cu cantitatea de date alocate pe stiva intrucat dimensiunea acesteia este limitata. Umplerea stivei va duce la cunoscuta eroare de **stack overflow** (mai multe la laboratorul de securitate).
-
-> **NOTE:** Stack size-ul default pe Linux pe o arhitectura pe 64 biti este de 8MiB.
-
-
-## Stiva in contextul spatiului de adresa a unui proces
-
-Spatiul de adresa al unui proces, sau, mai bine spus, spatiul virtual de adresa al unui proces reprezinta zona de memorie virtuala utilizabila de un proces. Fiecare proces are un spatiu de adresa propriu. Chiar in situatiile in care doua procese partajează o zona de memorie, spatiul virtual este distinct, dar se mapeaza peste aceeasi zona de memorie fizica.
-
-![stack_image](./images/process_address_space.jpg)
-
-In figura alaturata este prezentat un spatiu de adresa tipic pentru un proces.
-
-Cele 4 zone importante din spatiul de adresa al unui proces sunt zona de date, zona de cod, stiva si heap-ul. După cum se observa si din figura, stiva si heap-ul sunt zonele care pot creste. De fapt, aceste doua zone sunt dinamice si au sens doar in contextul unui proces. De partea cealalta, informatiile din zona de date si din zona de cod sunt descrise in executabil.
-
-## Tricks and tips
-
-1. Regula de aur a utilizarii stivei este : numarul de `push`-uri == numarul de `pop`-uri intr-o functie. Avand in vedere ca stiva este folosita pentru apelarea functiilor, este foarte important ca in momentul in care o functie isi termina executia, sa actualizeze esp-ul astfel incat acesta sa indice catre aceeasi zona de memorie (a stivei) catre care indica in momentul intrarii in functie.
-
-2. Avand in vedere ca exista situatii in care facem un numar N de `push`-uri si ajungem la finalul functiei fara sa fi facut `pop` pentru niciuna dintre valori, putem restabili capul stivei folosind instructiunea `add`.
-
-```assembly
-section .text
-global CMAIN
-CMAIN:
-    mov eax, 5
-    mov ebx, 6
-    mov ecx, 7
-
-    push eax
-    push ebx
-    push ecx
-
-    add esp, 12     ; echivalent cu utilizarea a 3 pop-uri consecutive
+    leave
     ret
 ```
 
-3. Metoda de mai sus are dezavantajul ca tot trebuie sa cautam prin program cate `push`-uri am facut (ceea ce poate sa necesite destul de mult timp in programele din viata reala). Daca nu vrem sa nu ne batem deloc capul cu stack pointerul, putem sa folosim urmatoarea constructie:
+### Remarcati:
 
-```assembly
-section .text
-global CMAIN
-CMAIN:
+1. O functie se defineste printr-un label.
 
-    mov ebp, esp       ; salveaza stack pointerul curent
+2. Dupa preambulul functiei, stiva arata in felul urmator:
 
-    mov eax, 5
-    mov ebx, 6
-    mov ecx, 7
+![function_stack1.jpg](./images/function_stack1.jpg)
 
-    push eax
-    push ebx
-    push ecx
+3. De observat că pe parcursul execuției funcției, ceea ce nu se schimbă este poziția frame pointer-ul. Acesta este și motivul denumirii sale: pointează la frame-ul curent al funcției. De aceea este comun ca accesarea parametrilor unei funcții să se realizeze prin intermediul frame pointer-ului. Presupunând un sistem pe 32 de biți și parametri de dimensiunea cuvântului procesorului (32 de biți, 4 octeți) vom avea:
 
-    mov esp, ebp       ; restaureaza stack pointerul
-    ret
+  - primul argument se găsește la adresa `ebp+8`
+  - al doilea argument se găsește la adresa `ebp+12`
+  - al treilea argument se găsește la adresa `ebp+16`
+  - etc
+
+    Acesta este motivul pentru care, pentru a obține parametrii funcției foo în registrele eax, ebx, ecx, folosim construcțiile:
+```Assembly
+    mov eax, dword [ebp+8]   ; primul argument in eax
+    mov ebx, dword [ebp+12]  ; al doilea argument in ebx
+    mov ecx, dword [ebp+16]  ; al treilea argument in ecx
 ```
 
-> **IMPORTANT:** Care este intrebuintarea principala a registrului `ebp`?
+4. Valoare de retur a unei functii se plaseaza in registre (in general in eax).
+  - Daca valoarea de retur este pe **8 biti** rezultatul functiei se plaseaza in `al`.
+  - Daca valoarea de retur este pe **16 biti** rezultatul functiei se plaseaza in `ax`.
+  - Daca valoarea de retur este pe **32 biti** rezultatul functiei se plaseaza in `eax`.
+  - Daca valoarea de retur este pe **64 biti** rezultatul se plaseaza in registrele `edx` si `eax`. Cei mai semnificativi 32 de biti se plaseaza in `edx`, iar restul in registrul `eax`.
 
-Dupa cum putem observa, registrul ebp defineste stack frame-ul fiecarei functii. De altfel, la fel cum putem adresa variabilele locale cu ajutorul registrului esp, acelasi lucru este este posibil si cu ebp. Mai mult de atat, vom vedea ca parametrii functiei apelate sunt adresati cu ajutorul lui ebp.
+    *De asemnea, in unele cazuri, se poate returna o adresa de memorie catre stiva/heap, sau alte zone de memorie, care refera obiectul dorit in urma apelului functiei.*
 
-## Exercitii
-> **IMPORTANT:** În cadrul laboratoarelor vom folosi repository-ul de git al materiei IOCLA - https://github.com/systems-cs-pub-ro/iocla. Repository-ul este clonat pe desktop-ul mașinii virtuale. Pentru a îl actualiza, folosiți comanda `git pull origin master` din interiorul directorului în care se află repository-ul (`~/Desktop/iocla`). Recomandarea este să îl actualizați cât mai frecvent, înainte să începeți lucrul, pentru a vă asigura că aveți versiunea cea mai recentă.Dacă doriți să descărcați repository-ul în altă locație, folosiți comanda `git clone https://github.com/systems-cs-pub-ro/iocla ${target}`. Pentru mai multe informații despre folosirea utilitarului `git`, urmați ghidul de la [Git Immersion](https://gitimmersion.com/).
+5. O functie foloseste aceleasi registre hardware, asadar, la iesirea din functie valorile registrelor nu mai sunt aceleasi. Pentru a evita aceasta situatie, se pot salva unele/toate registrele pe stiva.
+
+
+> **_NOTE:_**  Deoarece limbajele de asamblare ofera mai multe oportunitati, exista necesitatea de a avea conventii de apelare a functiilor in x86. Diferenta dintre acestea poate consta in ordinea parametrilor, modul cum parametrii sunt pasati functiei, ce registre trebuiesc conservate de apelat sau daca apelantul ori apelatul se ocupa de pregatirea stivei. Mai multe detalii puteti gasi [aici](https://en.wikipedia.org/wiki/X86_calling_conventions) sau [aici](https://levelup.gitconnected.com/x86-calling-conventions-a34812afe097) daca wikipedia e prea mainstream pentru voi.
+
+## Exerciții
+
+> **_IMPORTANT:_**  În cadrul laboratoarelor vom folosi repository-ul de git al materiei [IOCLA](https://github.com/systems-cs-pub-ro/iocla). Repository-ul este clonat pe desktop-ul mașinii virtuale. Pentru a îl actualiza, folosiți comanda `git pull origin master` din interiorul directorului în care se află repository-ul (`~/Desktop/iocla`). Recomandarea este să îl actualizați cât mai frecvent, înainte să începeți lucrul, pentru a vă asigura că aveți versiunea cea mai recentă.Dacă doriți să descărcați repository-ul în altă locație, folosiți comanda `git clone https://github.com/systems-cs-pub-ro/iocla ${target}`. Pentru mai multe informații despre folosirea utilitarului git, urmați ghidul de la [Git Immersion](https://gitimmersion.com/)
+
+
+### 0. Recapitulare: Șirul lui Fibonacci
+
+Completați fișierul `fibo.asm` din arhivă pentru a realiza un program care afișează primele N numere din șirul lui Fibonacci.
+
+Aveți voie să folosiți doar memorie alocată pe stivă.
+
+
+### 1. Hello, world!
+
+Deschideți fișierul `hello-world.asm`, asamblați-l și rulați-l. Observați afișarea mesajului *Hello, world!*
+
+Remarcați că:
+
+  - Programul `hello-world.asm` folosește apelul funcției `puts` (funcție externă modulului curent) pentru a efectua afișarea. Pentru aceasta pune argumentul pe stivă și apelează funcția.
+  - Variabila `msg` din programul `hello-world.asm` conține octetul `10`. Acesta simbolizează caracterul *line-feed* (`\n`), folosit pentru a adăuga o linie nouă pe Linux.
+
+Încheierea cu `\n` este, în general, utilă pentru afișarea șirurilor. Funcția `puts` pune automat o linie nouă după șirul afișat, însă aceasta trebuie adăugată explicit în cazul folosirii funcției `printf`.
+
+
+### 2. Dezasamblarea unui program scris în C
+
+După cum spuneam, în final, totul ajunge în limbaj de asamblare (ca să fim 100% corecți, totul ajunge cod mașină care are o corespondență destul de bună cu codul asamblare). Adesea ajungem să avem acces doar la codul obiect al unor programe și vrem să inspectăm modul în care arată.
+
+Pentru a observa acest lucru, haideți să compilăm până la codul obiect un program scris în C și apoi să-l dezasamblăm. Este vorba de programul `test.c` din arhiva de laborator.
+
+> **_NOTE:_**  Pentru a compila un fișier cod sursă C/C++ în linia de comandă, urmați pașii:
 >
-### 0. Recapitulare: Media aritmetică a elementelor dintr-un vector
+> 1. Deschideți un terminal. (shortcut `Ctrl+Alt+T`)
+> 2. Accesați directorul în care aveți codul sursă.
+> 3. Folosiți comanda
+> ```Bash
+> gcc -m32 -o <executabil> <nume-fisier>
+> ```
+> unde `<nume-fisier>` este numele fișierului iar `<executabil>` este executabilul rezultat.
+>
+> 1. Dacă doriți **doar** să compilați fișierul (**fără** să-l link-ați), atunci folosiți comanda
+> ```Bash
+> gcc -m32 -c -o <fisier-obiect> <nume-fisier>
+> ```
+> unde `<nume-fisier>` este numele fișierului iar `<fisier-obiect>` este fișierul obiect rezultat.
 
-Pornind de la exercițiul `0-recap-mean.asm` din arhiva de laborator, implementați codul lipsă, marcat de comentarii de tip `TODO`, pentru a realiza un program care calculează media aritmetică a elementelor dintr-un vector. Afișați doar partea întreagă a mediei (câtul împărțirii).
-
-> **NOTE:** Dacă ați făcut calculul corect, suma elementelor vectorului va fi `3735` iar media aritmetică a elementelor din vector va fi `287`.
-
-
-### 1. Max
-
-Calculați maximul dintre numerele din 2 registre (`eax` și `ebx`) folosind o instrucțiune de comparație, o instrucțiune de salt și instrucțiuni `push`/`pop`.
-
-> **TIP:** Gandiți-vă cum puteți să interschimbați două registre folosind stiva.
-
-
-### 2. Construirea array-ului inversat
-
-Pornind de la exercițiul `reverse-array.asm`, implementați `TODO`-urile **fără a folosi instrucțiunea `mov` în lucrul cu array-urile** astfel încât în array-ul `output` la finalul programului să se afle array-ul `input` inversat.
-
-> **NOTE:** Dupa o rezolvare corecta programul ar trebui sa printeze:
->```
->    Reversed array:
->    911
->    845
->    263
->    242
->    199
->    184
->    122
->```
-
-### 3. Adresarea si printarea stivei
-Programul `stack-addressing.asm` din arhiva laboratorului alocă și inițializează două variabile locale pe stivă:
-
-* un array format din numerele naturale de la 1 la `NUM`
-* un string “Ana are mere”.
-
-1. Înlocuiți fiecare instrucțiune `push` cu o secvență de instrucțiuni echivalentă.
-1. Printați adresele și valorile de pe stivă din intervalul **[ESP, EBP]** (de la adrese mici la adrese mari) octet cu octet.
-1. Printați string-ul alocat pe stivă octet cu octet și explicați cum arată acesta în memorie. Gândiți-vă de la ce adresă ar trebui să afișați și când ar trebui să vă opriți.
-1. Printați vectorul alocat pe stivă element cu element. Gândiți-vă de la ce adresă ar trebui să începeți afișarea și ce dimensiune are un element.
-
-> **NOTE:** După o implementare cu succes, programul ar trebui să afișeze ceva asemănător cu următorul output (nu fix același lucru, adresele de pe stivă pot să difere):
->```
->0xffcf071b: 65
->0xffcf071c: 110
->0xffcf071d: 97
->0xffcf071e: 32
->0xffcf071f: 97
->...
->0xffcf0734: 4
->0xffcf0735: 0
->0xffcf0736: 0
->0xffcf0737: 0
->0xffcf0738: 5
->0xffcf0739: 0
->0xffcf073a: 0
->0xffcf073b: 0
->Ana are mere
->1 2 3 4 5
->```
->Explicați semnificația fiecărui octet. De ce sunt puși în ordinea respectivă? De ce unii octeți sunt 0?
-
-> **TIP:** Amintiți-vă ce valoare au caracterele în reprezentarea zecimală(codul ASCII).
-Amintiți-vă în ce ordine sunt ținuți octeții unui număr: revedeți secțiunea **Ordinea de reprezentare a numerelor mai mari de un octet** din Laboratorul 01.
-
-> **HINT:** Citiți sectiunea Operatii asupra stivei.
-
-### 4. Variabile locale
-Programul `merge-arrays.asm` din cadrul arhivei de laborator, îmbină două array-uri sortate crescător (`array_1` și `array_2`) punând array-ul rezultat în `array_output` definit în secțiunea `.data`.
-
-Modificați programul astfel încat `array_output` să fie alocat pe stivă. Alocarea array-ului se face cu instructiunea sub.
-
-### 5. BONUS: GCD - Greatest Common Divisor
-Deschideți `gcd.asm` și rulați programul. Codul calculează cel mai mare divizor comun dintre două numere date ca parametru prin registrele eax și edx, și pune valoarea calculată tot în registrul eax.
-
-1. Faceți modificările necesare astfel încat mesajul de eroare - `Segmentation fault (core dumped)` - să nu mai apară.
-1. În cadrul label-ului `print` afișați rezultatul sub forma:
-
+În cazul nostru, întrucât dorim doar să compilăm fișierul `test.c` la modulul obiect, vom accesa din terminal directorul în care se găsește fișierul și apoi vom rula comanda
+```Bash
+gcc -m32 -c -o test.o test.c
 ```
-gcd(49,28)=7
+În urma rulării comenzii de mai sus în directorul curent vom avea fișierul obiect `test.o`.
+
+Putem obține și forma în limbaj de asamblare a acestuia folosind comanda
+```Bash
+gcc -m32 -masm=intel -S -o test.asm test.c
 ```
+
+În urma rulării comenzii de mai sus obținem fișierul `test.asm` pe care îl putem vizualiza folosind comanda
+```Bash
+cat test.asm
+```
+
+Pentru a dezasambla codul unui modul obiect vom folosi un utilitar frecvent întâlnit în lumea Unix: `objdump`. Pentru dezasamblare, vom rula comanda
+```Bash
+objdump -M intel -d <path-to-obj-file>
+```
+unde `<path-to-obj-file>` este calea către fișierul obiect `test.o`.
+
+Veți obține un output similar celui de mai jos
+```Bash
+$ objdump -M intel -d test.o
+
+test.o:     file format elf32-i386
+
+Disassembly of section .text:
+
+0000054d <second_func>:
+ 54d:   55                      push   ebp
+ 54e:   89 e5                   mov    ebp,esp
+ 550:   e8 a6 00 00 00          call   5fb <__x86.get_pc_thunk.ax>
+ 555:   05 ab 1a 00 00          add    eax,0x1aab
+ 55a:   8b 45 08                mov    eax,DWORD PTR [ebp+0x8]
+ 55d:   8b 10                   mov    edx,DWORD PTR [eax]
+ 55f:   8b 45 0c                mov    eax,DWORD PTR [ebp+0xc]
+ 562:   01 c2                   add    edx,eax
+ 564:   8b 45 08                mov    eax,DWORD PTR [ebp+0x8]
+ 567:   89 10                   mov    DWORD PTR [eax],edx
+ 569:   90                      nop
+ 56a:   5d                      pop    ebp
+ 56b:   c3                      ret
+
+0000056c <first_func>:
+ 56c:   55                      push   ebp
+ 56d:   89 e5                   mov    ebp,esp
+ 56f:   53                      push   ebx
+ 570:   83 ec 14                sub    esp,0x14
+ 573:   e8 83 00 00 00          call   5fb <__x86.get_pc_thunk.ax>
+ 578:   05 88 1a 00 00          add    eax,0x1a88
+ 57d:   c7 45 f4 03 00 00 00    mov    DWORD PTR [ebp-0xc],0x3
+ 584:   83 ec 0c                sub    esp,0xc
+ 587:   8d 90 80 e6 ff ff       lea    edx,[eax-0x1980]
+ 58d:   52                      push   edx
+ 58e:   89 c3                   mov    ebx,eax
+ 590:   e8 4b fe ff ff          call   3e0 <puts@plt>
+ 595:   83 c4 10                add    esp,0x10
+ 598:   83 ec 08                sub    esp,0x8
+ 59b:   ff 75 f4                push   DWORD PTR [ebp-0xc]
+ 59e:   8d 45 08                lea    eax,[ebp+0x8]
+ 5a1:   50                      push   eax
+ 5a2:   e8 a6 ff ff ff          call   54d <second_func>
+ 5a7:   83 c4 10                add    esp,0x10
+ 5aa:   8b 45 08                mov    eax,DWORD PTR [ebp+0x8]
+ 5ad:   8b 5d fc                mov    ebx,DWORD PTR [ebp-0x4]
+ 5b0:   c9                      leave
+ 5b1:   c3                      ret
+
+000005b2 <main>:
+ 5b2:   8d 4c 24 04             lea    ecx,[esp+0x4]
+ 5b6:   83 e4 f0                and    esp,0xfffffff0
+ 5b9:   ff 71 fc                push   DWORD PTR [ecx-0x4]
+ 5bc:   55                      push   ebp
+ 5bd:   89 e5                   mov    ebp,esp
+ 5bf:   53                      push   ebx
+ 5c0:   51                      push   ecx
+ 5c1:   e8 8a fe ff ff          call   450 <__x86.get_pc_thunk.bx>
+ 5c6:   81 c3 3a 1a 00 00       add    ebx,0x1a3a
+ 5cc:   83 ec 0c                sub    esp,0xc
+ 5cf:   6a 0f                   push   0xf
+ 5d1:   e8 96 ff ff ff          call   56c <first_func>
+ 5d6:   83 c4 10                add    esp,0x10
+ 5d9:   83 ec 08                sub    esp,0x8
+ 5dc:   50                      push   eax
+ 5dd:   8d 83 8e e6 ff ff       lea    eax,[ebx-0x1972]
+ 5e3:   50                      push   eax
+ 5e4:   e8 e7 fd ff ff          call   3d0 <printf@plt>
+ 5e9:   83 c4 10                add    esp,0x10
+ 5ec:   b8 00 00 00 00          mov    eax,0x0
+ 5f1:   8d 65 f8                lea    esp,[ebp-0x8]
+ 5f4:   59                      pop    ecx
+ 5f5:   5b                      pop    ebx
+ 5f6:   5d                      pop    ebp
+ 5f7:   8d 61 fc                lea    esp,[ecx-0x4]
+ 5fa:   c3                      ret
+```
+
+Există multe alte utilitare care permit dezasamblare de module obiect, majoritatea cu interfața grafică și oferind și suport pentru debugging. `objdump` este un utilitar simplu care poate fi rapid folosit în linia de comandă.
+
+Este interesant de urmărit, atât în fișierul `test.asm` cât și în dezasamblarea sa, modul în care se face un apel de funcție, lucru despre care vom discuta în continuare.
+
+### 3. Afișarea unui șir
+
+Pentru afișarea unui string putem folosi macro-ul intern `PRINTF32`. Sau putem folosi o funcție precum `puts`. În fișierul `print-string.asm` este implementată afișarea unui string folosind macro-ul `PRINTF32`.
+
+Urmărind fișierul `hello-world.asm` ca exemplu, implementați afișarea șirului folosind și `puts`.
+
+> **_NOTE:_**  Urmăriți și indicațiile din secțiunea *"Apelul unei funcții"*.
+
+### 4. Afișarea lungimii unui șir
+Programul `print-string-len.asm` afișează lungimea unui șir folosind macro-ul `PRINTF32`. Calculul lungimii șirului `mystring` are loc în cadrul programului (este deja implementat).
+
+Implementați programul pentru a face afișarea lungimii șirului folosind funcția `printf`.
+
+La sfârșit veți avea afișată de două ori lungimea șirului: inițial cu apelul macro-ului `PRINTF32` și apoi cu apelul funcției externe `printf`.
+
+> **_NOTE:_**  Gândiți-vă că apelul `printf` este de forma `printf("String length is %u\n", len);`. Trebuie să construiți stiva pentru acest apel.
+>
+> Pașii de urmat sunt:
+>
+> 1. Marcarea simbolului `printf` ca simbol extern.
+> 2. Definirea șirului de formatare `"String length is %u", 10, 0`.
+> 3. Realizarea apelului funcției `printf`, adică:
+>     1. Punerea celor două argumente pe stivă: șirul de formatarea și lungimea.
+>     2. Apelul `printf` folosind `call`.
+>     3. Restaurarea stivei.
+>
+> Lungimea șirului se găsește în registrul `ecx`.
+
+### 5. Afișarea șirului inversat
+
+În soluția de mai sus adăugați funcția `reverse_string` astfel încât să aveți un listing similar celui de mai jos:
+```Assembly
+[...]
+section .text
+global main
+
+reverse_string:
+    push ebp
+    mov ebp, esp
+
+    mov eax, dword [ebp+8]
+    mov ecx, dword [ebp+12]
+    add eax, ecx
+    dec eax
+    mov edx, dword [ebp+16]
+
+copy_one_byte:
+    mov bl, byte [eax]
+    mov byte [edx], bl
+    dec eax
+    inc edx
+    loopnz copy_one_byte
+
+    inc edx
+    mov byte [edx], 0
+
+    leave
+    ret
+
+main:
+    push ebp
+    mov ebp, esp
+[...]
+```
+> **_IMPORTANT:_**  Când copiați funcția `reverse_string` în programul vostru, rețineți că fucția începe la eticheta `reverse_string` și se oprește la eticheta `main`. Eticheta `copy_one_byte` este parte a funcției `reverse_string`.
+
+Funcția `reverse_string` inversează un șir și are următoarea signatură: `void reverse_string(const char *src, size_t len, char *dst);`. Astfel ca primele `len` caractere și șirul `src` sunt inversate în șirul `dst`.
+
+Realizați inversarea șirului `mystring` într-un nou șir și afișați acel nou șir.
+
+> **_NOTE:_**  Pentru a defini un nou șir, recomandăm ca, în secțiunea de date să folosiți construcția
+> ```Assembly
+> store_string times 64 db 0
+> ```
+> Construcția creează un șir de 64 de octeți de zero, suficient pentru a stoca inversul șirului.
+> Apelul echivalent în C al funcției este `reverse_string(mystring, ecx, store_string);`. În registrul `ecx` am presupus că este calculată lungimea șirului.
+>
+> Nu puteți folosi direct valoarea `ecx` în forma ei curentă. După apelul funcției `printf` pentru afișare numărului valoarea `ecx` se pierde. Ca să o păstrați, aveți două opțiuni:
+> 1. Stocați valoarea registrului `ecx` în prealabil pe stivă (folosind `push ecx` înaintea apelului `printf`) și apoi să o restaurați după apelul `printf` (folosind `pop ecx`).
+> 2. Stocați valoarea registrului `ecx` într-o variabilă globală, pe care o definiți în secțiunea `.data`.
+>
+> Nu puteți folosi un alt registru pentru că sunt șanse foarte mari ca și acel registru să fie modificat de apelul `printf` pentru afișarea lungimii șirului.
+
+### 6. Implementarea funcției toupper
+
+Ne propunem implementarea funcției `toupper` care traduce literele mici în litere mari. Pentru aceasta, porniți de la fișierul `toupper.asm` din arhiva de exerciții a laboratorului și completați corpul funcției `toupper`.
+
+Șirul folosit este `mystring` și presupunem că este un șir valid. Acest șir este transmis ca argument funcției `toupper` în momentul apelului.
+
+Faceți înlocuirea *in place*, nu este nevoie de un alt șir.
+
+> **_NOTE:_**  Ca să traduceți o litera mică în literă mare, trebuie să **scădeți** `0x20` din valoare. Aceasta este diferența între litere mici și mari; de exemplu `a` este `0x61` iar `A` este `0x41`. Puteți vedea în [pagina de manual ascii](http://man7.org/linux/man-pages/man7/ascii.7.html).
+>
+> a să citiți sau să scrieți octet cu octet folosiți construcția `byte [reg]` așa cum apare și în implementarea determinării lungimii unui șir în fișierul `print-string-len.asm`, unde `[reg]` este registrul de tip pointer în care este stocată adresa șirului în acel punct.
+>
+> Vă opriți atunci când ați ajuns la valoarea `0` (`NULL` byte). Pentru verificare puteți folosi `test` așa cum se întâmplă și în implementarea determinării lungimii unui șir în fișierul `print-string-len.asm`.
+
+### Bonus: toupper doar pentru litere mici
+
+Implementați funcția `toupper` astfel încât translatarea să aibă loc doar pentru caractare reprezentând litere mici, nu litere mari sau alte tipuri de caractere.
+
+### Bonus: rot13
+
+Realizați și folosiți o funcție care face translatarea [rot13](http://www.decode.org/) a unui șir.
+
+### Bonus: rot13++
+
+Implementați `rot13` pe un array de șiruri: șirurile sunt continue în memorie separate prin terminatorul de șir (`NULL`-byte, `0`). De exemplu: `ana\0are\0mere\0` este un array de trei șiruri.
+
+Aplicați `rot13` pe caracterele alfabetice și înlocuiți terminatorul de șir cu spațiu (`' '`, blank, caracterul `32` sau `0x20`). Astfel, șirul inițial `ana\0are\0mere\0` se va traduce în `nan ner zrer`.
+
+> **_NOTE:_**  Pentru a defini array-ul de șiruri care să conțină terminatorul de șir, folosiți o construcție de forma:
+> ```Assembly
+> mystring db "ana", 0, "are", 0, "mere", 0
+> ```
+
+> **_NOTE:_**  Va trebui să știți când sa vă opriți din parcurgerea array-ului de șiruri. Cel mai simplu este să definiți o variabilă de lungime în secțiunea `.data`, de forma
+> ```Assembly
+> len dd 10
+> ```
+> în care să rețineți fie lungimea totală a șirului (de la începutul până la ultimul `NULL`-byte), fie numărul de șiruri din array.
+
+## Alte resurse
+- [nasm](http://www.nasm.us/)
 
 ## Soluții
-Soluțiile pentru exerciții sunt disponibile [aici](https://elf.cs.pub.ro/asm/res/laboratoare/lab-08-sol.zip).
+- Soluțiile pentru exerciții sunt disponibile [aici](https://elf.cs.pub.ro/asm/res/laboratoare/lab-09-sol.zip).
