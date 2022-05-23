@@ -1,171 +1,386 @@
-# Laborator 10: Interactiunea C-assembly
-Având în vedere că limbajul de asamblare prezintă dificultăți atât în citirea cât și în dezvoltarea codului, tendința generală este aceea de a se migra către limbaje de nivel înalt (care sunt mult mai ușor de citit și oferă un API mult mai ușor de utilizat). Cu toate acestea, tot există situații în care, din rațiuni de optimizare, se folosesc mici rutine assembly care sunt integrate în modulul limbajului de nivel inalt.
+# Laborator 11: Gestiunea bufferelor. Buffer overflow
 
-În acest laborator vom vedea cum se pot integra module de assembly în programe C și viceversa.
+Acest laborator își propune prezentarea conceptului de buffere în C și limbaj de asamblare împreună cu operațiile specifice acestora,
+dar și vulnerabilitățile pe care acestea le au și cum pot ele să fie exploatate de un potențial atacator prin folosirea unui program
+cu scopul de a ataca un sistem sau de a obține informații la care în mod normal nu ar avea acces.
 
-## Utilizarea procedurilor assembly în funcții C
-Pentru ca un program C să ajungă să fie executat, este necesar ca acesta să fie tradus în codul mașina al procesorului; aceasta este sarcina unui compilator. Având în vedere că acest cod rezultat în urma compilării nu este întotdeauna optim, în anumite cazuri se preferă înlocuirea unor porțiuni de cod scris în C cu porțiuni de cod assembly care să facă același lucru, însă cu o performanță mai bună.
+Obiective:
+  - Prezentarea conceptelor de buffer și buffer overflow
+  - Exemple de atacuri de tip buffer overflow
+  - Prezentarea unor modalități de securizare a programelor pentru evitarea atacurilor de tip buffer overflow
 
-### Declararea procedurii
-Pentru a ne asigura că procedura assembly și modulul C se vor combina cum trebuie și vor fi compatibile, următorii pași trebuie urmați:
-- declararea labelului procedurii ca fiind global, folosing directiva GLOBAL. Pe lângă asta, orice date care vor fi folosite de către procedură trebuie declarate ca fiind globale.
-- folosirea directivei EXTERN pentru a declara procedurile și datele globale ca fiind externe.
+## Buffer. Buffer overflow
 
-### Setarea stivei
-Atunci când se intră intr-o procedură, este necesar să se seteze un stack frame către care să se trimită parametrii. Desigur, dacă procedura nu primește parametri, acest pas nu este necesar. Așadar, pentru a seta stiva, trebuie inclus următorul cod: 
-```Assembly
-push ebp
-mov ebp, esp
-```
-EBP-ul ne oferă posibilitatea să îl folosim ca un index în cadrul stivei și nu ar trebui alterat pe parcursul procedurii.
-### Conservarea registrelor
-Este necesar ca procedura să conserve valoarea registrelor ESI, EDI, EBP și a registrelor segment. În cazul în care aceste registre sunt corupte, este posibil ca programul să producă erori la întoarcerea din procedura assembly. 
-### Transmiterea parametrilor din C către procedura assembly
-Programele C trimit parametrii către procedurile assembly folosind stiva. Să considerăm următoarea secvență de program C: 
+### Ce este un buffer?
+
+Un buffer este o zonă de memorie definită printr-o adresă de start și o dimensiune. Fie N dimensiunea bufferului,
+adică numărul de elemente. Dimensiunea totală a bufferului este N x dimensiunea unui element.
+Un șir de caractere (*string*) este un caz particular de buffer.
+
+### Ce este un buffer overflow?
+
+Un buffer overflow este un eveniment care se produce atunci când în parcurgerea unui buffer se depășește limita superioară,
+adică poziția ultimului element (v[N - 1]). Un buffer overflow este un caz particular de *index out of bounds*,
+în care vectorul poate fi accesat folosind și indecși negativi. Multe funcții din C nu verifică dimensiunea bufferelor cu care lucrează,
+acestea cauzând erori de tip buffer overflow atunci când sunt apelate. Câteva exemple de astfel de funcții sunt:
+  - [memcpy](http://www.cplusplus.com/reference/cstring/memcpy/)
+  - [strcpy](https://www.cplusplus.com/reference/cstring/strcpy/)
+  - [fgets](http://www.cplusplus.com/reference/cstdio/fgets/)
+
+Un exemplu clasic de buffer overflow este dat de următorul cod:
 ```C
-extern int Sum();
-   ...
-int a1, a2, x;
-   ...
-x = Sum(a1, a2);
+char buffer[32];
+fgets(buffer, 64, stdin);
 ```
-Când C-ul execută apelul către Sum, mai întâi face push la argumente pe stivă, în ordine inversă, apoi face efectiv call către procedură. Astfel, la intrarea în corpul procedurii, stiva va fi intactă.
+ În urma execuției acestui cod vom obține un buffer overflow care ar putea conduce chiar la o eroare de tip *Segmentation Fault*,
+ însă acest lucru nu este garantat. Totul depinde de poziția bufferului pe stivă și de ceea ce se va suprascrie prin cei 32 de octeți
+ ce depășesc dimensiunea bufferului. Mai multe detalii despre ceea ce se va suprascrie,
+ dar și modalitatea prin care se va face acest lucru veți descoperi în timpul rezolvării exercițiilor.
 
-Cum variabilele `a1` și `a2` sunt declarate ca fiind valori `int`, vor folosi fiecare câte un cuvânt pe stivă. Metoda aceasta de pasare a parametrilor se numește pasare prin valoare. Codul procedurii Sum ar putea arăta în felul următor: 
-```Assembly
-Sum:
-        push    ebp             ; creează stack frame pointer
-        mov     ebp, esp
-        mov     eax, [ebp+8]    ; ia primul argument
-        mov     ecx, [ebp+12]   ; ia al doilea argument
-        add     eax, ecx        ; suma celor 2
-        pop     ebp             ; reface base pointerul
-        ret
-```
-Este interesant de remarcat o serie de lucruri. În primul rând, codul assembly pune în mod implicit valoarea de retur a procedurii în registrul `eax`. În al doilea rând, comanda `ret` este suficientă pentru a ieși din procedură, datorită faptului că compilatorul de C se ocupă de restul lucrurilor, cum ar fi îndepărtarea parametrilor de pe stivă.
-## Apelarea de funcții C din proceduri assembly
-În majoritatea cazurilor, apelarea de rutine sau funcții din biblioteca standard C dintr-un program în limbaj de asamblare este o operație mult mai complexă decât viceversa. Să luăm exemplul apelării funcției `printf` dintr-un program în limbaj de asamblare: 
-```Assembly
-global  main
+## Atacuri de tip buffer overflow
 
-extern  printf
+### Cum este folosit buffer overflow?
 
-section .data
+Buffer overflow poate fi exploatat de un potențial atacator pentru a suprascrie anumite date din cadrul unui program,
+afectând fluxul de execuție și oferind anumite beneficii atacatorului.
+Cel mai adesea, un atacator inițiază un atac de tip buffer overflow cu scopul de a obține acces la date confidențiale,
+la care, în mod normal, un utilizator obișnuit nu ar avea acces.
 
-text    db      "291 is the best!", 10, 0
-strformat db    "%s", 0
+Atacurile de tip buffer overflow sunt folosite în general pe buffere statice, stocate la nivel de stivă.
+Acest lucru se datorează faptului că pe stivă, pe lângă datele programului, se stochează și adrese de retur în urma apelurilor de funcții (vezi laboratorul 7).
+Aceste adrese pot fi suprascrise printr-un atac de tip buffer overflow, caz în care poate fi alterat fluxul de execuție a programului.
+Prin suprascrierea adresei de retur, odată cu încheierea execuției funcției curente nu se va mai reveni la execuția funcției apelante,
+ci se va „sări” la o altă adresă din cadrul executabilului de unde se va continua execuția.
+Acest eveniment poate conduce la comportament nedefinit al programului (*undefined behaviour*) dacă adresa la care se „sare” nu a fost calculată corect.
 
-section .code
+Scopul unui atacator este acela de a prelua controlul unui sistem prin obținerea accesului la un shell din care să poată rula comenzi.
+Acest lucru se poate realiza prin suprascrierea adresei de retur, folosind un apel de sistem prin intermediul căruia se poate deschide
+un shell pe sistemul pe care executabilul rulează (mai multe detalii la cursul de SO).
 
-main
-        push    dword text
-        push    dword strformat
-        call    printf
-        add     esp, 8
-        ret
-```
-Remarcați faptul că procedura este declarată ca fiind globală și se numește `main` - punctul de pornire al oricărui program C. Din moment ce în C parametrii sunt puși pe stivă în ordine inversă, offsetul stringului este pus prima oară, urmat de offsetul șirului de formatare. Funcția C poate fi apelată după aceea, însa stiva trebuie restaurată la ieșirea din funcție.
+### Cum ne protejăm de atacuri de tip buffer overflow?
 
-Când se face linkarea codului assembly trebuie inclusă și biblioteca standard C (sau biblioteca care conține funcțiile pe care le folosiți).
+Există multe modalități de a proteja un executabil de acest tip de atacuri. Pe majoritatea le veți studia în amănunt la cursul de SO anul viitor.
+O bună practică împotriva acestui tip de atac este de a evita folosirea unor funcții nesigure, precum cele prezentate mai sus.
+Mai multe detalii despre bune practici împotriva atacurilor de tip buffer overflow puteți găsi [aici](https://security.web.cern.ch/recommendations/en/codetools/c.shtml).
 
-## Exerciții
-> **IMPORTANT:** În cadrul laboratoarelor vom folosi repository-ul de git al materiei IOCLA - [https://github.com/systems-cs-pub-ro/iocla](https://github.com/systems-cs-pub-ro/iocla). Repository-ul este clonat pe desktop-ul mașinii virtuale. Pentru a îl actualiza, folosiți comanda `git pull origin master` din interiorul directorului în care se află repository-ul (`~/Desktop/iocla`). Recomandarea este să îl actualizați cât mai frecvent, înainte să începeți lucrul, pentru a vă asigura că aveți versiunea cea mai recentă. Dacă doriți să descărcați repository-ul în altă locație, folosiți comanda `git clone https://github.com/systems-cs-pub-ro/iocla ${target}`.Pentru mai multe informații despre folosirea utilitarului `git`, urmați ghidul de la [Git Immersion](https://gitimmersion.com/).
+De multe ori, bunele practici se dovedesc a fi insuficiente în „lupta” împotriva atacatorilor,
+motiv pentru care au fost inventate mai multe mecanisme de protecție a executabilelor prin manipularea codului
+și a poziției acestuia în cadrul executabilului (*Position Independent Code* - [PIC](https://en.wikipedia.org/wiki/Position-independent_code)),
+prin randomizarea adreselor (*Address Space Layout Randomization* - [ASLR](https://en.wikipedia.org/wiki/Address_space_layout_randomization))
+sau prin introducerea unor verificări suplimentare în cod pentru a detecta eventuale atacuri.
+Aceste verificări se realizează prin introducerea unor valori speciale, numite **canary** pe stivă,
+între buffer și adresa de retur a funcției. Aceste valori sunt generate și plasate în cadrul executabilului de către compilator
+și diferă la fiecare rulare a executabilului. În momentul în care un atacator vrea să suprascrie adresa de retur se va suprascrie
+și valoarea canary și înainte de a se părăsi apelul funcției curente se va verifica dacă acea valoare a fost modificată sau nu.
+Dacă a fost modificată înseamnă că a avut loc un buffer overflow și execuția programului va fi întreruptă.
+Acest mecanism se numește **Stack Smashing Protection** sau **Stack Guard**. Mai multe detalii despre Stack Guard,
+dar și despre atacuri de tip buffer overflow puteți găsi [aici](https://en.wikipedia.org/wiki/Buffer_overflow).
 
-### 1. Tutorial: Calcul maxim în assembly cu apel din C
-În subdirectorul `1-2-max-c-calls/` din arhiva de sarcini a laboratorului găsiți o implementare de calcul a maximului unui număr în care funcția `main()` este definită în C de unde se apelează funcția `get_max()` definită în limbaj de asamblare.
+## Pregătire infrastructură
 
-Urmăriți codul din cele două fișiere și modul în care se transmit argumentele funcției și valoarea de retur.
+> **IMPORTANT:** În cadrul laboratoarelor vom folosi repository-ul de git al materiei IOCLA - https://github.com/systems-cs-pub-ro/iocla.
+> Repository-ul este clonat pe desktop-ul mașinii virtuale. Pentru a îl actualiza, folosiți comanda git pull origin master din
+> interiorul directorului în care se află repository-ul (`~/Desktop/iocla`). Recomandarea este să îl actualizați cât mai frecvent,
+> înainte să începeți lucrul, pentru a vă asigura că aveți versiunea cea mai recentă.
+> Dacă doriți să descărcați repository-ul în altă locație, folosiți comanda `git clone https://github.com/systems-cs-pub-ro/iocla ${target}`. 
+> Pentru mai multe informații despre folosirea utilitarului `git`, urmați ghidul de la [Git Immersion](https://gitimmersion.com/).
 
-Compilați și rulați programul. Pentru a-l compila rulați comanda: 
-```bash
+Pentru desfășurarea acestui laborator vom folosi interfața în linia de comandă.
+
+Pe parcursul laboratorului, în linia de comandă, vom folosi: 
+  - asamblorul `nasm`
+  - comanda `gcc` pe post de linker
+  - `objdump` și `ghidra` pentru dezasamblarea fișierelor obiect și executabile
+  - `gdb` pentru analiza dinamică, investigație și debugging
+
+În general nu va fi nevoie să dați comenzi de compilare. Fiecare director cuprinde un Makefile pe care îl puteți rula
+pentru a compila în mod automat fișierele cod sursă limbaj de asamblare sau C.
+
+Înainte de a începe laboratorul, alocați-vă 1-2 minute să reparcurgeți diagrama de mai jos ce arată structura stivei în cazul unui apel de funcție.
+
+![Image](https://ocw.cs.pub.ro/courses/_media/iocla/laboratoare/stack-in-function-call.png?cache=)
+
+
+## 1. Tutorial: Folosirea unui buffer în zona de date
+
+Accesați, în linia de comandă, directorul `1-data-buffer/` din arhiva de resurse a laboratorului și consultați fișierul `data_buffer.asm`.
+În acest fișier se găsește un program care populează un buffer cu informații și apoi le afișează.
+
+Consultați cu atenție programul, apoi compilați-l folosind comanda:
+
+```Bash
 make
 ```
-În urma rulării comenzii rezultă executabilul mainmax pe care îl putem executa folosind comanda: 
-```bash
-./mainmax
+
+Observați că în urma comenzii de compilare de mai sus au rezultat un fișier obiect și un fișier executabil, prin rularea comenzii:
+
+```Bash
+ls
 ```
-> **IMPORTANT:**
-> Acordați atenție înțelegerii codului înainte de a trece la exercițiul următor. 
 
-> **IMPORTANT:**
-> Valoarea de retur a unei funcții este plasată în registrul `eax`.
+Rulați programul prin intermediul fișierului executabil, adică folosind comanda:
 
-### 2. Extindere calcul maxim în assembly cu apel din C
-Extindeți programul de la exercițiul anterior (în limbaj de asamblare și C) astfel încât funcția `get_max()` să aibă acum semnătura `unsigned int get_max(unsigned int *arr, unsigned int len, unsigned int *pos)`. Al treilea argument al funcției este adresa în care se va reține poziția din vector pe care se găsește maximul.
+```Bash
+./data_buffer
+```
 
-La afișare se va afișa și poziția din vector pe care se găsește maximul. 
-> **TIP:**
-> Pentru reținerea poziției, cel mai bine este definiți o variabilă locală `pos` în funcția `main` din fișierul C (`main.c`) în forma 
-> ```C
-> unsigned int pos;
->  ```
->  iar apelul funcției `get_max` îl veți face în forma: 
->  ```C
-> max = get_max(arr, 10, &pos);
->  ```
+Observați comportamentul programului în funcție de codul său.
 
-### 3. Depanare stack frame corupt
-În subdirectorul `3-stack-frame/` din arhiva de sarcini a laboratorului găsiți un program C care implementează afișarea stringului `Hello world!` printr-un apel al funcției `print_hello()` definită în assembly pentru prima parte a mesajului, urmat de două apeluri ale funcției `printf()` direct din codul C.
 
-Compilați și rulați programul. Ce observați? Mesajul printat nu este cel așteptat deoarece din codul assembly lipsește o instrucțiune.
+## 2. Tutorial: Folosirea unui buffer pe stivă
 
-Folosiți GDB pentru a inspecta adresa din vârful stivei înainte de execuția instrucțiunii `ret` din funcția `print_hello()`. Către ce pointează? Urmăriți valorile registrelor EBP si ESP pe parcursul execuției acestei funcții. Ce ar trebui să se afle în vârful stivei după execuția instrucțiunii `leave`?
+Accesați directorul `2-3-4-stack-buffer/` din arhiva de resurse a laboratorului și consultați fișierul `stack_buffer.asm`.
+În acest fișier se găsește un program care populează un buffer cu informații și apoi le afișează.
+Este similar celui de mai sus doar că acum buffer-ul este alocat pe stivă.
 
-Găsiți instrucțiunea lipsă și rerulați executabilul.
+Consultați cu atenție programul, apoi compilați-l folosind comanda:
 
-> **TIP:**
-> Pentru a putea restaura stiva la starea sa de la începutul funcției curente, instrucțiunea `leave` se bazează pe faptul că frame pointerul funcției a fost setat.
+```Bash
+make
+```
 
-### 4. Tutorial: Calcul maxim în C cu apel din assembly
-În subdirectorul `4-5-max-assembly-calls/` din arhiva de sarcini a laboratorului găsiți o implementare de calcul a maximului unui număr în care funcția `main()` este definită în limbaj de asamblare de unde se apelează funcția `get_max()` definită în C.
+apoi rulați-l folosind comanda:
 
-Urmăriți codul din cele două fișiere și modul în care se transmit argumentele funcției și valoarea de retur.
+```Bash
+./stack_buffer
+```
 
-Compilați și rulați programul. 
-> **IMPORTANT:**
-> Acordați atenție înțelegerii codului înainte de a trece la exercițiul următor. 
+Observați comportamentul programului în funcție de codul său.
 
-### 5. Extindere calcul maxim în C cu apel din assembly
-Extindeți programul de la exercițiul anterior (în limbaj de asamblare și C) astfel încât funcția `get_max()` să aibă acum semnătura `unsigned int get_max(unsigned int *arr, unsigned int len, unsigned int *pos)`. Al treilea argument al funcției este adresa în care se va reține poziția din vector pe care se găsește maximul.
+Pe lângă buffer am mai alocat o variabilă locală pe 4 octeți, accesibilă la adresa `ebp-4`.
+Este inițializată la valoarea `0xCAFEBABE`. Această variabilă va fi importantă mai târziu.
+Ce este relevant acum este să știm că această variabilă este în memorie **imediat după buffer**: când se trece de limita buffer-ului se ajunge la această variabilă.
 
-La afișare se va afișa și poziția din vector pe care se găsește maximul.
-> **TIP:**
-> Pentru a reține poziția, cel mai bine este să definiți o variabilă globală în fișierul assembly (`main.asm`) în secțiunea `.data`, în forma
+Care este diferenta intre cele 2 programe inspectate pana acum?
+
+
+## 3. Citirea de date dincolo de dimensiunea buffer-ului
+
+Acum că am văzut cum arată buffer-ul în memorie și unde este plasată variabila,
+actualizați programul `stack_buffer.asm` pentru ca secvența de afișare a buffer-ului
+(cea din jurul etichetei `print_byte`) să ducă și la afișarea octeților variabilei.
+Adică trebuie să citiți date dincolo de dimensiunea buffer-ului (și să le afișați).
+Este un caz de buffer overflow de citire, cu obiectiv de **information leak**: aflarea de informații din memorie.
+
+> **TIP** Nu e ceva complicat, trebuie doar să "instruiți" secvența de afișare să folosească altă limită pentru afișare,
+> nu limita curentă de 64 de octeți.
+
+Afișați și alte informații dincolo chiar de variabila locală.
+Ce informație vine pe stivă după variabila locală (următorii 4 octeți)? Dar următorii 4 octeți după?
+
+
+## 4. Scrierea de date dincolo de dimensiunea buffer-ului
+
+Pe baza experienței de mai sus, realizați modificări pentru ca valoarea variabilei să fie `0xDEADBEEF`
+(în loc de `0xCAFEBABE` cum este la început) fără a modifica însă explicit valoarea variabilei.
+Folosiți-vă de modificarea buffer-ului și de registrul `ebx` în care am stocat adresa de început a buffer-ului.
+
+> **TIP** Din nou, nu este ceva complicat. Trebuie să vă folosiți de valoarea `ebx` și un offset ca să scrieți valoarea `0xDEADBEEF` la acea adresă.
+> Adică folosiți o construcție de forma:
 > ```Assembly
-> pos: dd 0
+> mov byte [ebx+TODO], TODO
 > ```
->  Această variabilă o veți transmite (prin adresă) către apelul `get_max` și prin valoare pentru apelul `printf` pentru afișare.
->  
->  Pentru afișare modificați șirul `print_format` și apelul `printf` în fișierul assembly (`main.asm`) ca să permită afișare a două valori: maximul și poziția.
+> Realizați acest lucru după secvența de inițializare a buffer-ului (după instrucțiunea `jl fill_byte`).
 
-### 6. Tutorial: Conservare registre
-În subdirectorul `6-7-regs-preserve/` din arhiva de sarcini a laboratorului găsiți funcția `print_reverse_array()` implementată printr-un simplu loop ce face apeluri repetate ale funcției `printf()`.
+La o rezolvare corectă a acestui exercițiu, programul va afișa valoarea `0xDEADBEEF` pentru variabila locală.
 
-Urmăriți codul din fișierul `main.asm`, compilați și rulați programul. Ce s-a întâmplat? Programul rulează la infinit. Acest lucru se întămplă deoarece funcția `printf()` nu conservă valoarea din registrul `ECX`, folosit aici ca și contor.
 
-Decomentați liniile marcate cu `TODO1` și rerulați programul.
+## 5. Tutorial: Citirea de date de la intrarea standard
 
-### 7. Depanare SEGFAULT
-Decomentați liniile marcate cu `TODO2` în fișierul assembly de la exercițiul anterior. Secvența de cod realizează un apel al funcției `double_array()`, implementată în C, chiar înainte de afișarea vectorului folosind funcția văzută anterior.
+Accesați directorul `5-6-read-stdin/` din arhiva de resurse a laboratorului și consultați fișierul `read_stdin.asm`.
+În acest fișier se găsește un program care folosește apelul `gets` ca să citească informații de la intrarea standard
+într-un buffer de pe stivă. La fel ca în cazul precedent am alocat o variabilă locală pe 4 octeți imediat după buffer-ul de pe stivă.
 
-Compilați și rulați programul. Pentru depanarea segfault-ului puteți folosi utilitarul `objdump` pentru a urmări codul în limbaj de asamblare corespunzător funcției `double_array()`. Observați care din registrele folosite înainte și după apel sunt modificate de această funcție.
+Consultați cu atenție programul, apoi compilați-l folosind comanda:
 
-Adăugați în fișierul assembly instrucțiunile pentru conservarea și restaurarea registrelor necesare.
+```Bash
+make
+```
 
-### 8. Bonus: Calcul maxim în assembly cu apel din C pe 64 de biți
-Intrați în subdirectorul `8-max-c-calls-x64/` și faceți implementarea calculului maximului în limbaj de asamblare pe un sistem pe 64 de biți. Porniți de la programul de la exercițiile 4 și 5 în așa fel încât să îl rulați folosind un sistem pe 64 de biți.
+apoi rulați-l folosind comanda:
 
-> **TIP:**
-> https://en.wikipedia.org/wiki/X86_calling_conventions. 
-> 
-> Primul lucru pe care trebuie să-l aveți în vedere este că pe arhitectura x64 registrele au o dimensiune de 8 octeți și au nume diferite decât cele pe 32 de biți (pe lângă extinderea celor tradiționale: `eax` devine `rax`, `ebx` devine `rbx`, etc., mai există altele noi: R10-R15: pentru mai multe informații vedeți [aici](https://stackoverflow.com/questions/20637569/assembly-registers-in-64-bit-architecture)). 
-> 
->  De asemenea, pe arhitectura x64 parametrii nu se mai trimit pe stivă, ci se pun în registre. Primii 3 parametri se pun în: `RDI`, `RSI` și `RDX`. Aceasta nu este o convenţie adoptată uniform. Această convenţie este valabilă doar pe Linux, pe Windows având alte registre care sunt folosite pentru a transmite parametrii unei funcţii.
->  
->  Convenția de apel necesită ca, pentru funcțiile cu număr variabil de argumente, `RAX` să fie setat la numărul de registre vector folosiți pentru a pasa argumentele. `printf` este o funcție cu număr variabil de argumente, și dacă nu folosiți alte registre decât cele menționate în paragraful anterior pentru trimiterea argumentelor, trebuie să setați `RAX = 0` înainte de apel. Citiți mai multe [aici](https://stackoverflow.com/questions/38335212/calling-printf-in-x86-64-using-gnu-assembler). 
+```Bash
+./read_stdin
+```
 
-### 9. Bonus: Calcul maxim în C cu apel din assembly pe 64 de biți
-Intrați în subdirectorul `9-max-assembly-calls` și faceți implementarea calculului maximului în C cu apel din limbaj de asamblare pe un sistem pe 64 de biți. Porniți de la programul de la exercițiile 6 și 7 în așa fel încât să îl rulați folosind un sistem pe 64 de biți. Urmați indicațiile de la exercițiul anterior și aveți grijă la ordinea parametrilor. 
+Observați comportamentul programului funcție de input-ul primit.
+
+## 6. Buffer overflow cu date de la intrarea standard
+
+Funcția [gets](https://man7.org/linux/man-pages/man3/gets.3.html) este o funcție care este practic interzisă în programele C
+din cauza vulnerabilității mari a acesteia: nu verifică limitele buffer-ului în care se face citirea,
+putând fi ușor folosită pentru buffer overflow.
+
+Pentru aceasta transmiteți șirul de intrare corespunzător pentru ca valoarea afișată pentru variabila locală să nu mai fie
+`0xCAFEBABE`, ci să fie `0x574F4C46` (valorile ASCII în hexazecimal pentru `FLOW`). 
+
+> **IMPORTANT** Nu modificați codul în limbaj de asamblare.
+> Transmiteți șirul de intrare în format corespunzător la intrarea standard pentru a genera un buffer overflow și pentru a obține rezultatul cerut. 
+
+> **WARNING** Nu scrieți șirul `"574F4C46"`. Acesta e un șir care ocupă `8` octeți.
+> Trebuie să scrieți reprezentarea ASCII a numărului `0x574F4C46` adică `FLOW`: 
+> `0x57` este `W`, `0x4F` este `O`, `0x4C` este `L` iar `0x46` este `F`.
+
+> **TIP** x86 este o arhitectură little endian. Adică șirul `"FLOW"`, având corespondența caracter-cod ASCII
+> `F`: `0x46`, `L`: `0x4C`, `O`: `0x4F`, `W`: `0x57` va fi stocat în memorie pe `4` octeți ca `0x574F4C46`.
+> **Ce trebuie să faceți**: Va trebui ca, în cadrul buffer overflow-ului, să obțineți valoarea în memorie `0x574F4C46`.
+> Obțineți șirul ASCII corespondent valorii în memorie `0x574F4C46` pe care trebuie să îl furnizați la intrarea standard a programului vulnerabil.
+
+> **TIP** Ca să transmiteți șirul de intrare, e recomandat să-l scrieți într-un fișier și apoi să redirectați acel fișier către comanda aferentă programului.
+> Puteți folosi un editor precum `gedit` sau `vim` pentru editarea fișierului.
+> Avantajul acestora este că vă afișează și coloana pe care vă aflați și puteți să știți câte caractere ați scris în fișier.
+> Alternativ, puteți folosi python pentru a vă genera mai ușor payload-ul.
+> De exemplu, pentru a genera un payload care să suprascrie o valoare în cod cu valoarea `0xDEADBEEF`, puteți executa următoarea comandă:
+> ```python
+> python -c 'print "A"*32 + "\xEF\xBE\xAD\xDE"' > payload
+> ```
+> E recomandat să numiți fișierul `payload`. Redirectarea fișierului `payload` către program se face folosind o comandă precum:
+> ```Bash
+> ./read_stdin < payload
+> ```
+
+
+## 7. Buffer overflow cu date de la intrarea standard și fgets()
+
+Așa cum am precizat mai sus, funcția `gets` este interzisă în programele curente.
+În locul acesteia se poate folosi funcția [fgets](https://man7.org/linux/man-pages/man3/fgets.3.html).
+Creați o copie a fișierului cod sursă `read_stdin.asm` din subdirectorul `5-6-read-stdin/` într-un fișier
+cod sursă `read_stdin_fgets.asm` în subdirectorul `7-read-stdin-fgets/`.
+În fișierul cod sursă `read_stdin_fgets.asm` schimbați apelul funcției `gets()` cu apelul funcției `fgets`.
+
+Pentru apelul `fgets()` citiți de la intrarea standard. Ca argument pentru al treilea parametru al `fgets()`
+(de tipul `FILE *`) veți folosi intrarea standard. Pentru a specifica intrarea standard folosiți stream-ul [stdin](https://linux.die.net/man/3/stdin).
+Va trebui să îl marcați ca extern folosind, la începutul fișierului în limbaj de asamblare, construcția:
+
+> ```Assembly
+> extern stdin
+> ```
+
+`stdin` este o adresă; pentru a apela `fgets()` cu intrarea standard,
+este suficient să transmitem pe stivă valoarea de la adresa `stdin`, adică folosind construcția:
+
+> ```Assembly
+> push dword [stdin]
+> ```
+
+> **TIP** Urmăriți pagina de manual a funcției [fgets](https://man7.org/linux/man-pages/man3/fgets.3.html) pentru a afla ce parametri primește.
+
+> **TIP** Pentru apelul funcției `fgets()` folosiți construcția:
+> ```Assembly
+> call fgets
+> ```
+> De asemenea, marcați simbolul ca fiind extern folosind construcția:
+> ```Assembly
+> extern fgets
+> ```
+
+> **TIP** Întrucât funcția `fgets()` are 3 parametri (care ocupă `3×4=12` octeți) va trebui ca după apelul funcției,
+> în restaurarea stivei, să folosiți `add esp, 12` (în loc de `add esp, 4` ca în cazul programul de mai sus care folosea `gets()`).
+
+
+Să păstrați posibilitatea unui buffer overflow și să demonstrați acest lucru prin afișarea valorii `0x574F4C46`
+pentru variabila locală. Adică să folosiți ca al doilea argument pentru `fgets()` (dimensiunea)
+o valoare suficient de mare cât să permită realizarea unui buffer overflow.
+
+> **TIP** La fel ca mai sus, ca să transmiteți șirul de intrare pentru program, e recomandat să-l scrieți într-un fișier
+> și apoi să redirectați acel fișier către comanda aferentă programului.
+> Redirectarea fișierului `payload` către program se face folosind o comandă precum:
+> ```Bash
+> ./read_stdin_fgets < payload
+> ```
+
+> **IMPORTANT** Nu modificați codul în limbaj de asamblare. Transmiteți șirul de intrare în format corespunzător la intrarea standard
+> pentru a genera un buffer overflow și pentru a obține rezultatul cerut.
+
+
+## 8. Buffer overflow pentru program scris în cod C
+
+De cele mai multe ori vom identifica vulnerabilități de tip buffer overflow în programe scrise în C.
+Acolo trebuie să vedem ce buffere sunt și care este distanța de la buffer la variabila dorită pentru a putea face suprascrierea. 
+
+> **IMPORTANT** Este important de avut în vedere că distanța între un buffer și o altă variabilă în C poate nu corespunde cu cea "din teren";
+> compilatorul poate face actualizări, reordonări, poate lăsa spații libere între variabile etc.
+
+Pentru exercițiul curent, accesați directorul `8-c-buffer-overflow/` din arhiva de resurse a laboratorului
+și observați codul sursă aferent în C. Pentru cazul în care doriți să nu mai compilați voi codul aveți în arhivă
+și fișierul limbaj de asamblare echivalent și fișierul în cod obiect și fișierul executabil.
+
+Descoperiți diferența între adresa buffer-ului și adresa variabilei, creați un fișier de intrare (numit și `payload`)
+cu care să declanșați overflow-ul și faceți în așa fel încât să fie afișat mesajul *Full of win!*.
+
+> **TIP** Ca să vedeți realitatea "din teren", adică să aflați care este diferența dintre buffer și variabila pe care dorim să o suprascriem,
+> consultați fișierul în limbaj de asamblare echivalent (`do_overflow.asm`), obținut prin asamblarea codului C.
+> În acest fișier puteți afla adresa relativă a buffer-ului față de `ebp` și a variabilei față de `ebp`;
+> urmăriți secvența cuprinsă între liniile `32` și `41`; aveți o mapare între numele variabilei și offset-ul relativ față de `ebp`.
+> Cu aceste informații puteți crea șirul pe care să îl transmiteți ca payload către intrarea standard a programului.
+
+> **NOTE** Dacă doriți să recompilați fișierele rulați:
+> ```Bash
+> make clean && make
+> ```
+
+> **TIP** La fel ca mai sus, ca să transmiteți șirul de intrare pentru program, e recomandat să-l scrieți într-un fișier
+> și apoi să redirectați acel fișier către comanda aferentă > programului.
+> Redirectarea fișierului payload către program se face folosind o comandă precum:
+> ```Bash
+> ./do_overflow < payload
+> ```
+
+
+## 9. Bonus: Stack canary
+
+Pornind de la resursele exercițiului anterior din directorul `8-9-c-buffer-overflow` inspectați fișierul `Makefile`.
+
+> ```Bash
+> cat Makefile
+> ```
+
+Analizați atent opțiunile de compilare. Ce observați? 
+
+Așa cum ați observat în cadrul exercițiului anterior, deși am depășit dimensiunea buffer-ului
+și am suprascris o altă variabilă din program, acesta și-a încheiat execuția în mod normal.
+Acest lucru este nedorit atunci când lucrăm cu buffere, deoarece sunt o sursă de la care poate porni foarte ușor un atac.
+Folosind `objdump` inspectați funcția `main` a executabilului.
+
+> **TIP** Pentru a inspecta sursa, folosiți următoarea comandă:
+> ```Bash
+> objdump -M intel -d do_overflow
+> ```
+
+Acum intrați în fișierul `Makefile` și modificați parametrii `CFLAGS` înlocuind `-fno-stack-protector` cu `-fstack-protector`.
+Recompilați programul și rulați-l. Ce observați?
+
+> **NOTE** Prin opțiunea sau flag-ul `-fstack-protector` i-am cerut compilatorului să activeze opțiunea de
+> *Stack Smashing Protection* pentru executabilul nostru. Astfel, orice atac de tip buffer overflow
+> va fi detectat în cod și execuția programului se va încheia cu eroare.
+
+Inspectați din nou executabilul recompilat cu noul flag folosind `objdump`. Ce s-a schimbat?
+
+> **NOTE** Compilatorul a introdus pe stivă o valoare generată aleator, numită **canary**,
+> pe care o verifică înainte de a părăsi execuția funcției curente. Prin buffer overflow,
+> aceasta a fost suprascrisă odată cu depășirea dimensiunii buffer-ului,
+> ceea ce a determinat o neconcordanță între valoarea inițială a canary-ului și cea de la finalul execuției funcției. 
+
+
+## 10. Bonus: Buffer overflow pentru binar
+
+ De multe ori nu avem șansa accesului la codul sursă și vrem să descoperim vulnerabilități în fișiere executabile.
+ În directorul `10-overflow-in-binary` din arhiva de resurse a laboratorului, găsiți un fișier executabil.
+ Folosind `ghidra` sau `gdb` pentru investigație descoperiți cum puteți exploata vulnerabilitatea de tip buffer overflow,
+ pentru ca programul să afișeze mesajul *Great success!*.
+
+ > **IMPORTANT** Pentru a rula `ghidra` pe fișierul executabil `overflow_in_binary` trebuie să vă creați un proiect nou în care să importați fișierul executabil.
+ > Ghidra va detecta automat formatul fișierului. Rulați analiza executabilului după care căutați în Symbol Tree după funcția main.
+
+ > **TIP** Identificați în codul dezasamblat cum se transmite intrarea către program.
+ > Identificați unde este buffer overflow-ul. Identificați condiția de comparație pe care doriți să o declanșați.
+ > Apoi construiți payload-ul corespunzător și transmiteți-l în forma adecvată programului.
+
 
 ## Soluții
-Soluțiile pentru exerciții sunt disponibile [aici](https://elf.cs.pub.ro/asm/res/laboratoare/lab-10-sol.zip). 
+
+Soluțiile pentru exerciții sunt disponibile [aici](https://elf.cs.pub.ro/asm/res/laboratoare/lab-11-sol.zip).
+
+## Resurse
+
+Dacă laboratorul v-a impresionat într-un mod plăcut, puteți afla mai multe despre acest tip de atac, dar și despre securitate cibernetică în general, de pe acest [canal](https://www.youtube.com/c/LiveOverflow).
